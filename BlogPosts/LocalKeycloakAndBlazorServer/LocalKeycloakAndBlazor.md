@@ -114,7 +114,7 @@ Once you've updated it, remember to click on the "Save" button.
 
 Now that your realm is set up, it's time to create a client/an application in Keycloak. This is so that you in production can set up the security properly and only allow clients you trust to send users to the Keycloak instance for authentication. However, in this introductory local setup, we'll eschew the fine details and just take the shortest path to an instance throwing tokens at your browser that you can give to your app running locally.
 
-To begin, go th the "Clients" Page in the left hand menu, and click the "Create client" button.
+To begin, go to the "Clients" Page in the left hand menu, and click the "Create client" button.
 
 <figure>
   <img src="./images/Keycloak Setup - 06 - Create client step 1.png" alt="Realm clients overview page"/>
@@ -141,7 +141,7 @@ Once you've forged a name you're happy with, click next and go on to the "Capabi
 
 ### Login settings
 
-Here you will set up the addresses your application can send users to log in from, where the uses are allowed to be sent back to (it would be somewhat boring if after logging in the users took the shiny new token for you and just went straight to another webpage and gave it to them instead), and where they can be sent after they log out. Because the primary objective here is that getting ahold of OIDC tokens form a trusted provider just works, we'll allow anything by setting "Root URL" empty, "Home URL" also empty, "Valid redirect URIs" to "\*", "Valid post logout redirect URIs" to "+", and "Web origins" to "\*",
+Here you will set up the addresses your application can send users to log in from, where the uses are allowed to be sent back to (it would be somewhat boring if after logging in the users took the shiny new token for you and just went straight to another webpage and gave it to them instead), and where they can be sent after they log out. Because the primary objective here is that getting ahold of OIDC tokens form a trusted provider just works, we'll allow anything by setting "Root URL" empty, "Home URL" also empty, "Valid redirect URIs" to "\*", "Valid post logout redirect URIs" to "+", and "Web origins" to "\*".
 
 <figure>
   <img src="./images/Keycloak Setup - 09 - Create client step 4.png" alt="Create client login settings form"/>
@@ -537,7 +537,7 @@ public class ExternalInvokerService(HttpClient httpClient)
 }
 ```
 
-Beware that it's hardcoded to run within a Docker container and target a specific port on your host. If you run it outside Docker just go directly to localhost instead.
+Beware that it's hard coded to run within a Docker container and target a specific port on your host. If you run it outside Docker just go directly to localhost instead.
 
 Now you can register the service you just created in Program.cs
 
