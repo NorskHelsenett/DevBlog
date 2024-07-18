@@ -581,3 +581,8 @@ while true ; do echo -e "HTTP/1.0 200 OK\nContent-Length: 14\nContent-Type: text
 Blazor will not like the response (unlike for instance curl), but the only thing that matters at this point is seeing that the request is what we expect.
 
 And at this point, everything should just work!
+
+<figure>
+  <img src="./images/Blazor-final-page.png" alt="Example final Blazor page"/>
+  <figcaption>Example final Blazor page</figcaption>
+</figure>
