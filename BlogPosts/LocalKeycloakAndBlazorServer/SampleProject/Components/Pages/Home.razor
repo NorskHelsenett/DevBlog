@@ -1,0 +1,39 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Components.Authorization
+@inject IHttpContextAccessor HttpContextAccessor
+@inject ExternalInvokerService ExternalInvokerService
+
+<PageTitle>Home</PageTitle>
+
+<h1>Hello, world!</h1>
+
+Welcome to your new app.
+
+<h2>Parsed Claims</h2>
+<AuthorizeView>
+    <Authorized>
+        <div class="text-break">
+            @((MarkupString)@context.User.Claims.Aggregate("", (s, claim) => s += "<br />" + claim )["<br />".Length..])
+        </div>
+    </Authorized>
+</AuthorizeView>
+
+<h2>Raw Token</h2>
+<p class="text-break">@HttpContextAccessor.HttpContext!.GetTokenAsync("access_token").Result</p>
+
+<h2>Poke external service</h2>
+<button class="btn btn-outline-primary" @onclick="Poke">Poke</button>
+<p>@_pokeResult</p>
+
+@code
+{
+    private string? _pokeResult = "Before request";
+    private async void Poke()
+    {
+        _pokeResult = "Before request";
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        var result = await ExternalInvokerService.PokeExternalService(accessToken);
+        _pokeResult = result;
+    }
+}
