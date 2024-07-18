@@ -25,7 +25,7 @@ Table of Contents
 
 > A beginning is the time for taking the most delicate care that the balances are correct.
 
-This was written in july 2024, by Simon Randby while working for [Norsk Helsenett](https://www.nhn.no/). The used versions of [Keycloak](https://www.keycloak.org/) was 25.0.1, and [dotnet](https://dotnet.microsoft.com) was 8.0.303. The [Docker](https://docs.docker.com/) version was 27.0.3. All Docker images run were for the arm architecture.
+This was written in july 2024, by Simon Randby while working for [Norsk Helsenett](https://www.nhn.no/). The used version of [Keycloak](https://www.keycloak.org/) was 25.0.1, and [dotnet](https://dotnet.microsoft.com) was 8.0.303. The [Docker](https://docs.docker.com/) version was 27.0.3. All Docker images run were for the arm architecture.
 
 # Setting up Keycloak
 
