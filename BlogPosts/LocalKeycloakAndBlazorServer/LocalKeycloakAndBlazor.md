@@ -2,7 +2,9 @@ Local development with Keycloak and Blazor Server
 ===
 
 Published:
-ToDo
+ToDo - link to medium
+
+See complete example at https://github.com/NorskHelsenett/DevBlog/tree/main/BlogPosts/LocalKeycloakAndBlazorServer/SampleProject
 
 # Motivation
 
