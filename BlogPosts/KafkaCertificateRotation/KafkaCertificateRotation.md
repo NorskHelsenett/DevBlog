@@ -14,7 +14,7 @@ and provectuslabs/kafka-ui:v0.7.2 were used, with [Docker](https://docs.docker.c
 
 The process is rather simple. Here's the complete list of steps, assuming your not only rotating the certificates, but the CA as well.
 
-1. Obtain new CA
+1. Obtain new CA (Subject CN must be diffrent from the old CA)
 2. Add new CA to trust store on brokers (add, not replace)
 3. Add new CA to trust store on connecting applications (again, don't replace the old CA)
 4. Obtain new certificates for connecting applications and start using them
@@ -24,11 +24,15 @@ Should you run with zookeepers the process is much the same for them, except you
 
 The important bit is that neither the central infrastructure components or connecting applications can start using the new certificates/credentials before the other side has established trust in the new issuer. And, more often than not, you will have a greater number and diversity of connecting applications, which is harder to manage, than the small handful of central components, which now mostly consists of relatively uniform K-Raft nodes. This will result in that you need a significantly greater amount of time to heard all the ~~kittens~~ connecting applications so they start using the new credentials and updating their trust stores. The effect is that it is really important that the first change you make is updating the brokers trust stores, and that the last thing you change is the certificates the brokers present themselves with.
 
+If your old CA and the New CA has the exact same subject CN. Then the rotation will fail. Make sure you that your new CA har a diffrent Subject CN than your old. This can be a integer that increments. 
+
 # The interesting details
 
 Most of this is very straight forward, at least if you've already set up the SSL credentials previously. For an example of a full cluster set up with SSL auth, you can check out our example at https://github.com/NorskHelsenett/Kafka/blob/main/GetStarted/MultiBrokerClusterWithAuthAndMtls/docker-compose.yaml
 
 The trick is really in the "Add new CA to trust store". This might sound like it involves a lot of magic and incantations of the openssl CLI, but can in fact be achieved by simply smashing the old and new CA certificate together in a single file.
+
+Just to be clear, the example Pem does not have diffrent Subject CN´s, if you have the same Subject CN you will have issues with rotating your truststore.
 
 For instance, if your old/original CAs certificate (PEM formatted) is
 
