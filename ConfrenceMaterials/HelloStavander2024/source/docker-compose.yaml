@@ -1,0 +1,76 @@
+networks:
+  apps_network:
+    name: apps_network
+    external: true
+
+services:
+  fileshare_web:
+    image: localhost/fileshare_web
+    container_name: fileshare_web
+    build:
+      context: .
+      dockerfile: fileshare_web/Dockerfile
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - "8090:8080"
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData:/ContainerData
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+  fileshare_rest:
+    image: localhost/fileshare_rest
+    container_name: fileshare_rest
+    build:
+      context: .
+      dockerfile: fileshare_rest/Dockerfile
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData:/ContainerData
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      # App config
+      BIG_PAYLOADS_CHUNKS_TOPIC: "workshop-big-payloads-chunks"
+      BIG_PAYLOADS_METADATA_TOPIC: "workshop-big-payloads-metadata"
+      BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES: "256"
+
+      # kafkal config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+      KAFKA_GROUP_ID: "big-payloads"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+    healthcheck:
+      # Can be commented out to use the check embedded in the image. However, due to how compose works, checking for if we are ready is what we want
+      test: [ "CMD", "dotnet", "/HealthChecker/HealthChecker.dll", "--", "http://localhost:8080/healthz/ready" ]
+      start_period: "5s"
+      interval: "60s"
+      timeout: "1s"
+      retries: 20

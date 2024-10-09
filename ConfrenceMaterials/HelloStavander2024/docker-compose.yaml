@@ -1,0 +1,1431 @@
+# ToDo:
+# - Replace this list of ToDo's with a readme?
+#   - Mention where to find the kafka UI (localhost:8081)
+#   - Say you can connect to the brokers from outside contexts by attaching to the "apps_network". See example of how in sibling docker compose file.
+#   - Outline how to make more and test with other credentials?
+#   - Say that your life can be easier locally if the containers run with the same user as you, because you can then access all the generated files and anything else without having to mess around with changing ownership or permissions. The important thing is that the user Ids are the same for all the services needing to use the generated files, if you don't want to extend the scripts. You can find your own user ID:Group by running `$(id -u):$(id -g)`, or you can use `${UID}:${GROUPS}` directly as the value in the `user` filed (e.g. `services.broker1.user: ${UID}:${GROUPS}`).
+#   - Highlight some important flags:
+#     - `services.set-up-container-mount-area.environment.RESET_EVERYTHING`
+#       - Removes all the stored folders and starts fresh if you set it to `true`.
+#     - `services.create-certificate-authority.environment.RECREATE_IF_EXISTS`
+#       - Should you want to recreate the CA, set this to `true`. Note that this won't trigger the issued certificates being recreated.
+#     - `services.create-certificates.environment.RECREATE_IF_EXISTS`
+#       - Should you want to recreate the Certificates, set this to `true`.
+#     - `services.create-certificates.command.USE_DEMO_PASSWORDS`
+#       - If you want to use the script to make random password rather than fixed demo values, set this to anything else than `true`.
+#     - `services.create-certificates.command.RSA_BITS`
+#       - Default to 1024, because 4096 is noticeably slow to humans, and default mode here is demo. You probably want other values in prod. If you change this, you probably also need to change the value for the CA (`services.create-certificate-authority.command.RSA_BITS`).
+#     - `services.create-certificates.command.ENV_NAME`
+#       - Helpfully makes a lot of the files contain the envrionment name, so that if you create multiple environments to experiment with running things in parallell it becomes easier to tell appart what files come from where.
+#     - `services.create-certificates.command.VALIDITY_DAYS`
+#       - Controlls how long the issued credentials are valid for. Note that if this is shorter than the validity of the CA, the crendentials will become invalid at the point in time the CA expires.
+#   - Mention that while this gives you a lot, you still need to do a lot before calling yourself production ready
+#     - Set up log shipping and handling
+#     - Proper storage solution for the Schema registry
+#     - Consider kafka UI having/being an admin user, and the existence of admin users in general
+#     - Now that we're half way in 2024, you might want to do this with kubernetes instead
+
+networks:
+  controllers_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.21.82.0/24"
+        - subnet: "2001:2181:2181::/64"
+  brokers_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.90.92.0/24"
+        - subnet: "2001:9092:9092::/64"
+  apps_network:
+    attachable: true
+    name: apps_network
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.80.80.0/24"
+        - subnet: "2001:8080:8080::/64"
+
+services:
+  set-up-container-mount-area:
+    image: debian:stable-slim
+    user: 1000:1001
+    container_name: set-up-container-mount-area
+    volumes:
+      - .:/ProjectDir
+    environment:
+      RESET_EVERYTHING: "true"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo '================ Creating Output Directory with gitignore ========='
+        if [ ''$$RESET_EVERYTHING == 'true' ]; then
+          echo 'WARNING: Wiping ALL container data, certificates, everything, and starting fresh!'
+          rm -rf /ProjectDir/ContainerData
+        fi
+
+        mkdir -p /ProjectDir/ContainerData
+
+        if [ ! -f /ProjectDir/ContainerData/.gitignore ]; then
+          echo 'Creating gitignore so that you dont accidentaly check in container data'
+          echo 'If you want some of the container data checked in, simply add an exception to the gitignore'
+          printf '%s\n' '*' '#!.gitignore' > /ProjectDir/ContainerData/.gitignore
+        fi
+
+        echo 'Creating folders for persisting kafka state between runs'
+        mkdir -p /ProjectDir/ContainerData/Kafka
+
+        echo 'Creating folders for persisting kafka brokers state between runs'
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker1
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker1/Data
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker2
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker2/Data
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker3
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker3/Data
+
+        echo 'Creating directory for persisting apicurio schema registry state between runs'
+        mkdir -p /ProjectDir/ContainerData/Apicurio
+        echo '================ Done Creating Output Directory with gitignore ===='
+
+  create-certificate-authority:
+    image: localhost/cert-creator:latest
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-certificate-authority
+    depends_on:
+      set-up-container-mount-area:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    volumes:
+      - ./ContainerData:/ContainerData
+    environment:
+      RECREATE_IF_EXISTS: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo '================ Setting Up Variables ============================='
+        ENV_NAME='lokalmaskin'
+        VALIDITY_DAYS='365'
+        # Default to 1024, because 4096 is noticeably slow to humans, and default mode here is demo
+        RSA_BITS='1024'
+        CERT_PASSWORD_LENGTH='32'
+
+        CA_PASSWORD_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/password.txt'
+        CA_KEY_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/ca.key'
+        CA_CRT_FILE_NAME='ca.crt'
+        CA_CRT_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/'$$CA_CRT_FILE_NAME
+        echo '================ Done Setting Up Variables ========================'
+
+        if [ -f $$CA_CRT_PATH ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
+          echo 'CA CRT file exists, and recreation not set to true, exiting without creating CA'
+          exit 0
+        fi
+
+        echo '================ Creating CA ======================================'
+        rm -rf /ContainerData/GeneratedCerts/CertificateAuthority
+        mkdir -p /ContainerData/GeneratedCerts/CertificateAuthority
+        cd /ContainerData/GeneratedCerts/CertificateAuthority
+
+        CA_PASSWORD=$(tr -dc 'A-Za-z0-9!$%&()*+,-./<>?@[\]^_{|}~' </dev/urandom | head -c $$CERT_PASSWORD_LENGTH; echo)
+        # CA_PASSWORD=This_is_guaranteed_to_work!1
+
+        echo $$CA_PASSWORD > $$CA_PASSWORD_PATH
+
+        # echo 'The generated password of the day is:'
+        # cat '$$CA_PASSWORD_PATH'
+        # # echo 'the variable was'
+        # # echo $$CA_PASSWORD
+        # echo 'END The generated password of the day'
+
+        openssl req \
+          -new \
+          -x509 \
+          -keyout $$CA_KEY_PATH \
+          -newkey 'rsa:'$$RSA_BITS \
+          -out $$CA_CRT_PATH \
+          -days $$VALIDITY_DAYS \
+          -subj '/CN=ca-'$$ENV_NAME'.example.com' \
+          -passin pass:$$CA_PASSWORD \
+          -passout file:$$CA_PASSWORD_PATH 2> /dev/null
+
+        echo '================ Done Creating CA ================================='
+
+  create-certificates:
+    image: localhost/cert-creator:latest
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-certificates
+    depends_on:
+      create-certificate-authority:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    volumes:
+      - ./ContainerData:/ContainerData
+    environment:
+      RECREATE_IF_EXISTS: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        if [ -f /ContainerData/GeneratedCerts/Kafka/Brokers/broker1/acl-principal.pfx ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
+          echo 'Because Broker1s CRT file exists assuming that all other certs also exist, and recreation not set to true, exiting without creating any certs'
+          exit 0
+        fi
+        echo '================ Setting Up Variables ============================='
+        ENV_NAME='lokalmaskin'
+        VALIDITY_DAYS='365'
+        # Default to 1024, because 4096 is noticeably slow to humans, and default mode here is demo
+        RSA_BITS='1024'
+        CERT_PASSWORD_LENGTH='32'
+        USE_DEMO_PASSWORDS='true'
+
+        CA_PASSWORD_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/password.txt'
+        CA_KEY_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/ca.key'
+        CA_CRT_FILE_NAME='ca.crt'
+        CA_CRT_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/'$$CA_CRT_FILE_NAME
+
+        echo '================ Done Setting Up Variables ========================'
+
+        function CreateBrokereAcl {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --dns1*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_DNS_1="$${1#*=}"
+                ;;
+              --dns2*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_DNS_2="$${1#*=}"
+                ;;
+              --dns3*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_DNS_3="$${1#*=}"
+                ;;
+              --ip_brokers_network_v4*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_BROKERS_NETWORK_IPV4="$${1#*=}"
+                ;;
+              --ip_brokers_nettwork_v6*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_BROKERS_NETWORK_IPV6="$${1#*=}"
+                ;;
+              --ip_controllers_network_v4*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_CONTROLLERS_NETWORK_IPV4="$${1#*=}"
+                ;;
+              --ip_controllers_network_v6*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_CONTROLLERS_NETWORK_IPV6="$${1#*=}"
+                ;;
+              --ip_apps_network_v4*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_APPS_NETWORK_IPV4="$${1#*=}"
+                ;;
+              --ip_apps_network_v6*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_APPS_NETWORK_IPV6="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+
+          # This being fixed/shared between all enables 1 acl for all brokers
+          local BROKERS_CN='broker'
+
+          echo "Cleaning and setting up folder structure for $$BROKER_DNS_1 certificate"
+          rm -rf /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1
+          mkdir -p /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1
+          pushd /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1
+
+          echo "Setting up password for $$BROKER_DNS_1 certificate"
+          local BROKER_DEMO_PASSWORD=$(tr -dc 'A-Za-z0-9!$%&()*+,-./<>?@[\]^_{|}~' </dev/urandom | head -c $$CERT_PASSWORD_LENGTH; echo)
+          if [ ''$$USE_DEMO_PASSWORDS == 'true' ]; then
+            echo "WARNING: Setting up local demo password for $$BROKER_DNS_1 certificate"
+            BROKER_DEMO_PASSWORD='Broker_demo_password'
+          fi
+          echo $$BROKER_DEMO_PASSWORD > "/ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/password.txt"
+
+          echo "Creating private key for $$BROKER_DNS_1 certificate"
+          openssl genrsa \
+            -passout file:/ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/password.txt \
+            -aes256 \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.key $$RSA_BITS
+
+          echo "Creating certificate signing request config for $$BROKER_DNS_1 certificate"
+          printf '%s\n' \
+            '[req]' \
+            'default_bits = '$$RSA_BITS \
+            'prompt = no' \
+            'default_md = sha512' \
+            'distinguished_name = req_distinguished_name' \
+            'x509_extensions = v3_req' \
+            '' \
+            '[req_distinguished_name]' \
+            '' \
+            '[v3_req]' \
+            'basicConstraints=CA:FALSE' \
+            'subjectAltName = @alt_names' \
+            '' \
+            '[alt_names]' \
+            'DNS.1 = '$$BROKER_DNS_1 \
+            'DNS.2 = '$$BROKER_DNS_2 \
+            'DNS.3 = '$$BROKER_DNS_3 \
+            'IP.1 = '$$BROKER_IP_BROKERS_NETWORK_IPV4 \
+            'IP.2 = '$$BROKER_IP_BROKERS_NETWORK_IPV6 \
+            'IP.3 = '$$BROKER_IP_CONTROLLERS_NETWORK_IPV4 \
+            'IP.4 = '$$BROKER_IP_CONTROLLERS_NETWORK_IPV6 \
+            'IP.5 = '$$BROKER_IP_APPS_NETWORK_IPV4 \
+            'IP.6 = '$$BROKER_IP_APPS_NETWORK_IPV6 > /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr.config
+
+          echo "Creating certificate signing request for $$BROKER_DNS_1 certificate"
+          openssl req \
+            -new \
+            -key /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.key \
+            -passin pass:$$BROKER_DEMO_PASSWORD \
+            -subj '/CN='$$BROKERS_CN \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr \
+            -config /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr.config
+
+          echo "Creating and signing certificate for $$BROKER_DNS_1"
+          openssl x509 \
+            -req \
+            -CA $$CA_CRT_PATH \
+            -CAkey $$CA_KEY_PATH \
+            -passin file:$$CA_PASSWORD_PATH \
+            -in /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.crt \
+            -days $$VALIDITY_DAYS \
+            -CAcreateserial \
+            -extensions v3_req \
+            -extfile /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr.config
+
+          echo "Creating pkcs12 certificate bundle for $$BROKER_DNS_1"
+          openssl pkcs12 \
+            -inkey /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.key \
+            -in /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.crt \
+            -passin pass:$$BROKER_DEMO_PASSWORD \
+            -passout pass:$$BROKER_DEMO_PASSWORD \
+            -export \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.pfx
+
+          echo "Copying CA certificate/public key to $$BROKER_DNS_1 folder"
+          cp $$CA_CRT_PATH /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/
+
+          echo "Creating bootstrap config file for $$BROKER_DNS_1"
+          printf '%s\n' \
+            'security.protocol=SSL' \
+            'ssl.keystore.location=acl-principal.pfx' \
+            'ssl.keystore.password='$$BROKER_DEMO_PASSWORD \
+            'ssl.keystore.type=PKCS12' \
+            'ssl.truststore.type=PEM' \
+            'ssl.truststore.location='$$CA_CRT_FILE_NAME > /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/bootstrap.conf
+
+          popd
+        }
+
+        # For each zookeeper and broker, specify the addresses it's supposed to answer on, so that it may present a vaild identity for the endpoint.
+        # If you need names, like for docker compose/kubernetes internal networks or urls, like broker1 or broker1.kafka.example.com, put them in a DNS alt name in your certificate signing request config.
+        # If your clients use IP addresses for finding their bootstrap servers, put them in an IP alt name.
+
+        CreateBrokereAcl --dns1 "broker1" \
+          --dns2 "broker1.$$ENV_NAME" \
+          --dns3 "localhost" \
+          --ip_brokers_network_v4 "172.90.92.11" \
+          --ip_brokers_nettwork_v6 "2001:9092:9092::11" \
+          --ip_controllers_network_v4 "172.21.82.21" \
+          --ip_controllers_network_v6 "2001:2181:2181::21" \
+          --ip_apps_network_v4 "172.80.80.11" \
+          --ip_apps_network_v6 "2001:8080:8080::11"
+
+        CreateBrokereAcl --dns1 "broker2" \
+          --dns2 "broker2.$$ENV_NAME" \
+          --dns3 "localhost" \
+          --ip_brokers_network_v4 "172.90.92.12" \
+          --ip_brokers_nettwork_v6 "2001:9092:9092::12" \
+          --ip_controllers_network_v4 "172.21.82.22" \
+          --ip_controllers_network_v6 "2001:2181:2181::22" \
+          --ip_apps_network_v4 "172.80.80.12" \
+          --ip_apps_network_v6 "2001:8080:8080::12"
+
+        CreateBrokereAcl --dns1 "broker3" \
+          --dns2 "broker3.$$ENV_NAME" \
+          --dns3 "localhost" \
+          --ip_brokers_network_v4 "172.90.92.13" \
+          --ip_brokers_nettwork_v6 "2001:9092:9092::13" \
+          --ip_controllers_network_v4 "172.21.82.23" \
+          --ip_controllers_network_v6 "2001:2181:2181::23" \
+          --ip_apps_network_v4 "172.80.80.13" \
+          --ip_apps_network_v6 "2001:8080:8080::13"
+
+        function CreateUserCerts {
+          local USER_CN=$$1
+          local USER_OUTPUT_DIR="/ContainerData/GeneratedCerts/Kafka/Users/$$1"
+          echo "Cleaning and setting up folder structure for $$USER_CN certificate"
+          rm -rf $$USER_OUTPUT_DIR
+          mkdir -p $$USER_OUTPUT_DIR
+          pushd $$USER_OUTPUT_DIR
+
+          echo "Setting up password for $$USER_CN certificate"
+          local USER_PASSWORD=$(tr -dc 'A-Za-z0-9!$%&()*+,-./<>?@[\]^_{|}~' </dev/urandom | head -c $$CERT_PASSWORD_LENGTH; echo)
+          if [ ''$$USE_DEMO_PASSWORDS == 'true' ]; then
+            echo "WARNING: Setting up local demo password for $$USER_CN certificate"
+            USER_PASSWORD='demo_cert_password'
+          fi
+          echo $$USER_PASSWORD > $$USER_OUTPUT_DIR/password.txt
+
+          echo "Creating private key for $$USER_CN certificate"
+          openssl genrsa \
+            -passout file:$$USER_OUTPUT_DIR/password.txt \
+            -aes256 \
+            -out $$USER_OUTPUT_DIR/acl-principal.key $$RSA_BITS
+
+          echo "Creating certificate signing request config for $$USER_CN certificate"
+          printf '%s\n' \
+            '[req]' \
+            'default_bits = '$$RSA_BITS \
+            'prompt = no' \
+            'default_md = sha512' \
+            'distinguished_name = req_distinguished_name' \
+            'x509_extensions = v3_req' \
+            '' \
+            '[req_distinguished_name]' \
+            '' \
+            '[v3_req]' \
+              'basicConstraints=CA:FALSE' > $$USER_OUTPUT_DIR/acl-principal.csr.config
+
+          echo "Creating certificate signing request for $$USER_CN certificate"
+          openssl req \
+            -new \
+            -key $$USER_OUTPUT_DIR/acl-principal.key \
+            -passin pass:$$USER_PASSWORD \
+            -subj /CN=$$USER_CN \
+            -out $$USER_OUTPUT_DIR/acl-principal.csr \
+            -config $$USER_OUTPUT_DIR/acl-principal.csr.config
+
+          echo "Creating and signing certificate for $$USER_CN"
+          openssl x509 \
+            -req \
+            -CA $$CA_CRT_PATH \
+            -CAkey $$CA_KEY_PATH \
+            -passin file:$$CA_PASSWORD_PATH \
+            -in $$USER_OUTPUT_DIR/acl-principal.csr \
+            -out $$USER_OUTPUT_DIR/acl-principal.crt \
+            -days $$VALIDITY_DAYS \
+            -CAcreateserial \
+            -extensions v3_req \
+            -extfile $$USER_OUTPUT_DIR/acl-principal.csr.config
+
+          echo "Creating pkcs12 certificate bundle for $$USER_CN"
+          openssl pkcs12 \
+            -inkey $$USER_OUTPUT_DIR/acl-principal.key \
+            -in $$USER_OUTPUT_DIR/acl-principal.crt \
+            -passin pass:$$USER_PASSWORD \
+            -passout pass:$$USER_PASSWORD \
+            -export \
+            -out $$USER_OUTPUT_DIR/acl-principal.pfx
+
+          echo "Copying CA certificate/public key to $$USER_CN folder"
+          cp $$CA_CRT_PATH $$USER_OUTPUT_DIR/
+
+          echo "Creating admin client config file for $$USER_CN"
+          printf '%s\n' \
+            'security.protocol=SSL' \
+            'ssl.keystore.location=acl-principal.pfx' \
+            'ssl.keystore.password='$$USER_PASSWORD \
+            'ssl.keystore.type=PKCS12' \
+            'ssl.truststore.type=PEM' \
+            'ssl.truststore.location='$$CA_CRT_FILE_NAME > $$USER_OUTPUT_DIR/adminclient-configs.conf
+
+          popd
+        }
+
+        CreateUserCerts "admin"
+        CreateUserCerts "kafka-ui"
+        CreateUserCerts "demo-producer"
+        CreateUserCerts "demo-consumer"
+        CreateUserCerts "avro-user"
+        CreateUserCerts "protobuf-user"
+        CreateUserCerts "json-user"
+
+  broker1:
+    image: apache/kafka:3.8.0
+    hostname: broker1
+    container_name: broker1
+    user: 1000:1001
+    depends_on:
+      create-certificates:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      brokers_network:
+        ipv4_address: 172.90.92.11
+        ipv6_address: 2001:9092:9092::11
+      controllers_network:
+        ipv4_address: 172.21.82.21
+        ipv6_address: 2001:2181:2181::21
+      apps_network:
+        ipv4_address: 172.80.80.11
+        ipv6_address: 2001:8080:8080::11
+    ports:
+      - "9094:9094"
+    environment:
+      # Config docs: https://kafka.apache.org/documentation/
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 1
+      CLUSTER_ID: "bHcwZ3c3a2FqbjFxZHN3OX" # 16 bytes of a base64-encoded UUID. Practically 22 b64 characters. Shell: `uuidgen --time | tr -d '-' | base64 | cut -b 1-22`. JavaScript: `btoa((Math.random()*1e64).toString(36)).substring(0,22)`
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker1:2181,2@broker2:2181,3@broker3:2181"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "BROKER:SSL, CONTROLLER:SSL, APPS:SSL, EXTERNAL_APPS:SSL"
+      KAFKA_LISTENERS: "BROKER://0.0.0.0:9091,CONTROLLER://0.0.0.0:2181,APPS://0.0.0.0:9092,EXTERNAL_APPS://0.0.0.0:9094"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://172.90.92.11:9091,APPS://172.80.80.11:9092,EXTERNAL_APPS://localhost:9094"
+
+      KAFKA_SSL_CLIENT_AUTH: "required"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_LOCATION: /kafka/secrets/acl-principal.pfx
+      KAFKA_SSL_KEYSTORE_PASSWORD: "Broker_demo_password"
+      KAFKA_SSL_KEY_PASSWORD: "Broker_demo_password"
+
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_SUPER_USERS: "User:CN=broker;User:CN=kafka-ui;User:CN=admin"
+
+      KAFKA_NUM_PARTITIONS: "1" # Default number of partitions for new topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1" # Default replication factor for new topics
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1" # Set to 1 to allow local cluster with 1 node
+      KAFKA_LOG_DIR: "/var/lib/kafka/data" # Where the data is stored
+    healthcheck:
+      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker1:9092 --config ./bootstrap.conf || exit 1']
+      start_period: "7s"
+      interval: "5s"
+      timeout: "10s"
+      retries: 10
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Brokers/broker1:/kafka/secrets
+      - ./ContainerData/Kafka/Brokers/Broker1/Data:/var/lib/kafka/data
+
+  broker2:
+    image: apache/kafka:3.8.0
+    hostname: broker2
+    container_name: broker2
+    user: 1000:1001
+    depends_on:
+      create-certificates:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      brokers_network:
+        ipv4_address: 172.90.92.12
+        ipv6_address: 2001:9092:9092::12
+      controllers_network:
+        ipv4_address: 172.21.82.22
+        ipv6_address: 2001:2181:2181::22
+      apps_network:
+        ipv4_address: 172.80.80.12
+        ipv6_address: 2001:8080:8080::12
+    ports:
+      - "9095:9095"
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 2
+      CLUSTER_ID: "bHcwZ3c3a2FqbjFxZHN3OX"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker1:2181,2@broker2:2181,3@broker3:2181"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "BROKER:SSL, CONTROLLER:SSL, APPS:SSL, EXTERNAL_APPS:SSL"
+      KAFKA_LISTENERS: "BROKER://0.0.0.0:9091,CONTROLLER://0.0.0.0:2181,APPS://0.0.0.0:9092,EXTERNAL_APPS://0.0.0.0:9095"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://172.90.92.12:9091,APPS://172.80.80.12:9092,EXTERNAL_APPS://localhost:9095"
+
+      KAFKA_SSL_CLIENT_AUTH: "required"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_LOCATION: /kafka/secrets/acl-principal.pfx
+      KAFKA_SSL_KEYSTORE_PASSWORD: "Broker_demo_password"
+      KAFKA_SSL_KEY_PASSWORD: "Broker_demo_password"
+
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_SUPER_USERS: "User:CN=broker;User:CN=kafka-ui;User:CN=admin"
+
+      KAFKA_NUM_PARTITIONS: "1"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_LOG_DIR: "/var/lib/kafka/data"
+    healthcheck:
+      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker2:9092 --config ./bootstrap.conf || exit 1']
+      start_period: "7s"
+      interval: "5s"
+      timeout: "10s"
+      retries: 10
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Brokers/broker2:/kafka/secrets
+      - ./ContainerData/Kafka/Brokers/Broker2/Data:/var/lib/kafka/data
+
+  broker3:
+    image: apache/kafka:3.8.0
+    hostname: broker3
+    container_name: broker3
+    user: 1000:1001
+    depends_on:
+      create-certificates:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      brokers_network:
+        ipv4_address: 172.90.92.13
+        ipv6_address: 2001:9092:9092::13
+      controllers_network:
+        ipv4_address: 172.21.82.23
+        ipv6_address: 2001:2181:2181::23
+      apps_network:
+        ipv4_address: 172.80.80.13
+        ipv6_address: 2001:8080:8080::13
+    ports:
+      - "9096:9096"
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 3
+      CLUSTER_ID: "bHcwZ3c3a2FqbjFxZHN3OX"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker1:2181,2@broker2:2181,3@broker3:2181"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "BROKER:SSL, CONTROLLER:SSL, APPS:SSL, EXTERNAL_APPS:SSL"
+      KAFKA_LISTENERS: "BROKER://0.0.0.0:9091,CONTROLLER://0.0.0.0:2181,APPS://0.0.0.0:9092,EXTERNAL_APPS://0.0.0.0:9096"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://172.90.92.13:9091,APPS://172.80.80.13:9092,EXTERNAL_APPS://localhost:9096"
+
+      KAFKA_SSL_CLIENT_AUTH: "required"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_LOCATION: /kafka/secrets/acl-principal.pfx
+      KAFKA_SSL_KEYSTORE_PASSWORD: "Broker_demo_password"
+      KAFKA_SSL_KEY_PASSWORD: "Broker_demo_password"
+
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_SUPER_USERS: "User:CN=broker;User:CN=kafka-ui;User:CN=admin"
+
+      KAFKA_NUM_PARTITIONS: "1"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+      KAFKA_LOG_DIR: "/var/lib/kafka/data"
+    healthcheck:
+      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker3:9092 --config ./bootstrap.conf || exit 1']
+      start_period: "7s"
+      interval: "5s"
+      timeout: "10s"
+      retries: 10
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Brokers/broker3:/kafka/secrets
+      - ./ContainerData/Kafka/Brokers/Broker3/Data:/var/lib/kafka/data
+
+  create-acls:
+    image: apache/kafka:3.8.0
+    hostname: create-acls
+    container_name: create-acls
+    user: 1000:1001
+    networks:
+      - apps_network
+    depends_on:
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+    environment:
+      BOOTSTRAP_SERVERS: "broker1:9092"
+      _JAVA_OPTIONS: "-Xmx64M -Xms64M"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        cd /kafka/secrets
+
+        function CreateProduceAcl {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --topic*|-t*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                TOPIC="$${1#*=}"
+                ;;
+              --principal*|-p*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                PRINCIPAL="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+          /opt/kafka/bin/kafka-acls.sh --bootstrap-server "$$BOOTSTRAP_SERVERS" \
+            --command-config 'adminclient-configs.conf' \
+            --add \
+            --allow-principal "User:CN=$$PRINCIPAL" \
+            --allow-host '*' \
+            --producer \
+            --topic "$$TOPIC"
+        }
+
+        function CreateConsumeAcl {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --topic*|-t*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                TOPIC="$${1#*=}"
+                ;;
+              --principal*|-p*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                PRINCIPAL="$${1#*=}"
+                ;;
+              --group|-g)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                GROUP="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+          /opt/kafka/bin/kafka-acls.sh --bootstrap-server "$$BOOTSTRAP_SERVERS" \
+            --command-config 'adminclient-configs.conf' \
+            --add \
+            --allow-principal "User:CN=$$PRINCIPAL" \
+            --allow-host '*' \
+            --consumer \
+            --topic "$$TOPIC" \
+            --group "$$GROUP"
+        }
+
+        CreateProduceAcl --topic "Users" --principal "demo-producer"
+        CreateConsumeAcl --topic "Users" --principal "demo-consumer" --group "cg.demo-consumer.0"
+
+        CreateProduceAcl --topic "persons-avro" --principal "avro-user"
+        CreateConsumeAcl --topic "persons-avro" --principal "avro-user" --group "persons-avro-group"
+
+        CreateProduceAcl --topic "persons-protobuf" --principal "protobuf-user"
+        CreateConsumeAcl --topic "persons-protobuf" --principal "protobuf-user" --group "persons-protobuf-group"
+
+        CreateProduceAcl --topic "persons-json" --principal "json-user"
+        CreateConsumeAcl --topic "persons-json" --principal "json-user" --group "persons-json-group"
+
+  create-demo-topics:
+    image: apache/kafka:3.8.0
+    hostname: create-demo-topics
+    container_name: create-demo-topics
+    user: 1000:1001
+    networks:
+      - apps_network
+    depends_on:
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+    environment:
+      BOOTSTRAP_SERVERS: "broker1:9092"
+      _JAVA_OPTIONS: "-Xmx64M -Xms64M"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        cd /kafka/secrets
+
+        # blocks until kafka is reachable
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server $$BOOTSTRAP_SERVERS --command-config 'adminclient-configs.conf' --list
+
+        function CreateTopic {
+          /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server $$BOOTSTRAP_SERVERS \
+            --command-config 'adminclient-configs.conf' \
+            --create \
+            --if-not-exists \
+            --topic $$1 \
+            --replication-factor '3' \
+            --partitions '1' \
+            --config 'cleanup.policy=delete' \
+            --config 'max.message.bytes=1000012' \
+            --config 'min.insync.replicas=2' \
+            --config 'retention.bytes=-1' \
+            --config 'retention.ms=-1'
+        }
+
+        CreateTopic "Users"
+        CreateTopic "DemoTopic1"
+        CreateTopic "DemoTopic2"
+        CreateTopic "persons-avro"
+        CreateTopic "persons-protobuf"
+        CreateTopic "persons-json"
+
+  schema-registry:
+    image: apicurio/apicurio-registry:latest-release
+    hostname: schema-registry
+    container_name: schema-registry
+    user: 1000:1001
+    depends_on:
+      set-up-container-mount-area:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      - apps_network
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./ContainerData/Apicurio:/container_storage
+    environment:
+      APPLICATION_ID: "example-apicurioregistry"
+      REGISTRY_API_ERRORS_INCLUDE-STACK-IN-RESPONSE: "true"
+      REGISTRY_AUTH_ENABLED: "false"
+      APICURIO_STORAGE_KIND: 'sql'
+      APICURIO_STORAGE_SQL_KIND: 'h2'
+      APICURIO_DATASOURCE_URL: "jdbc:h2:file:/container_storage/apicurio_h2_file_db"
+    healthcheck:
+      test: curl --fail localhost:8080/health/ready
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 1s
+
+  create-demo-schemas:
+    image: localhost/cert-creator:latest # Re-use same we use for certs
+    # user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-demo-schemas
+    depends_on:
+      schema-registry:
+        required: true
+        restart: false
+        condition: service_healthy
+    networks:
+      - apps_network
+    environment:
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8080/apis/ccompat/v7"
+      SCHEMA_DEFINITION_USER_VALUE: |
+        {
+          "$$schema": "http://json-schema.org/draft-06/schema",
+          "title": "User",
+          "type": "object",
+          "properties": {
+            "id": { "type": "string" },
+            "name": { "type": "string" },
+            "contactDetails": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": { "enum": [ "emailAddress", "phoneNumber" ] },
+                  "value": { "type": "string" },
+                  "primary": { "type": "boolean" }
+                },
+                "required": [ "kind", "value", "primary" ]
+              },
+              "createdAt": { "type": "date-time" },
+              "createdBy": { "type": "string" },
+              "updatedAt": { "type": "date-time" },
+              "updatedBy": { "type": "string" }
+            },
+            "tags": {
+              "type": "array",
+              "items": { "type": "string" },
+              "uniqueItems": true
+            }
+          },
+          "required": [ "id", "name", "contactDetails", "createdAt", "createdBy" ]
+        }
+      SCHEMA_DEFINITION_PERSONS_AVRO: |
+        {
+            "namespace": "no.nhn.examples.serialization.avro",
+            "name": "Person",
+            "type": "record",
+            "fields": [
+                {
+                    "name": "Id",
+                    "type": "string"
+                },
+                {
+                    "name": "Name",
+                    "type": {
+                        "name": "PersonName",
+                        "type": "record",
+                        "fields": [
+                            {
+                                "name": "Given",
+                                "type": "string"
+                            },
+                            {
+                                "name": "Family",
+                                "type": "string"
+                            }
+                        ]
+                    }
+                },
+                {
+                    "name": "Tags",
+                    "type":{
+                        "type": "array",
+                        "items": "string",
+                        "default": []
+                    }
+                }
+            ]
+        }
+      SCHEMA_DEFINITION_PERSONS_PROTOBUF: |
+        syntax = "proto3";
+
+        message PersonName{
+            string Given = 1;
+            string Family = 2;
+        }
+
+        message Person {
+            string Id = 1;
+            .PersonName Name = 2;
+            repeated string Tags = 3;
+        }
+      SCHEMA_DEFINITION_PERSONS_JSON: |
+        {
+          "$schema": "http://json-schema.org/draft-04/schema#",
+          "title": "Person",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "Id": {
+              "type": [
+                "null",
+                "string"
+              ]
+            },
+            "Name": {
+              "oneOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "$ref": "#/definitions/PersonName"
+                }
+              ]
+            },
+            "Tags": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "definitions": {
+            "PersonName": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "Given": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                },
+                "Family": {
+                  "type": [
+                    "null",
+                    "string"
+                  ]
+                }
+              }
+            }
+          }
+        }
+
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        function AddSchemaToRegistry {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --name*|-n*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                SCHEMA_NAME="$$1"
+                ;;
+              --value*|-v*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                SCHEMA_VALUE="$$1"
+                ;;
+              --type*|-t*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                SCHEMA_TYPE="$$1"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+
+          echo "============== Creating Demo Schema $$SCHEMA_NAME =================="
+          echo "Escaping double quotes in schema $$SCHEMA_NAME"
+          # Note double escape of the quotes (\\")
+          local schema_escaped=$(echo $$SCHEMA_VALUE | sed 's/"/\\"/g')
+
+          echo "Writing request body containing escaped schema to file"
+          echo '{'                                    >  schema.json
+          echo "  \"schema\": \"$$schema_escaped\","  >> schema.json
+          echo "  \"schemaType\":\"$$SCHEMA_TYPE\""   >> schema.json
+          echo '}'                                    >> schema.json
+          # Valid schema types at the moment are ["JSON","PROTOBUF","AVRO"] (curl --silent -X GET http://schema-registry:8080/apis/ccompat/v7/schemas/types)
+
+          echo "removing newlines in data to post"
+          sed -i 's/\n//g' schema.json
+
+          echo "Posting schema to registry"
+          curl -X POST -H "Content-Type: application/json" \
+            --data @schema.json \
+            $$KAFKA_CLUSTERS_0_SCHEMAREGISTRY/subjects/$$SCHEMA_NAME/versions
+          echo "" # Add newline to make log prettier
+          echo "============== Done Creating Demo Schema $$SCHEMA_NAME ============="
+        }
+
+        AddSchemaToRegistry --name "Users-value" --value "$$SCHEMA_DEFINITION_USER_VALUE" --type "JSON"
+        AddSchemaToRegistry --name "persons-avro-value" --value "$$SCHEMA_DEFINITION_PERSONS_AVRO" --type "AVRO"
+        AddSchemaToRegistry --name "persons-protobuf-value" --value "$$SCHEMA_DEFINITION_PERSONS_PROTOBUF" --type "PROTOBUF"
+        AddSchemaToRegistry --name "persons-json-value" --value "$$SCHEMA_DEFINITION_PERSONS_JSON" --type "JSON"
+
+  produce-demo-events:
+    image: localhost/python-kafka:latest
+    hostname: produce-demo-events
+    container_name: produce-demo-events
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.12
+        RUN pip install confluent-kafka \
+          && pip install jsonschema \
+          && pip install requests \
+          && pip install protobuf
+    depends_on:
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+      create-acls:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      create-demo-topics:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      schema-registry:
+        required: true
+        restart: false
+        condition: service_healthy
+      create-demo-schemas:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      - apps_network
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/demo-producer:/kafka/secrets
+    environment:
+      PYTHONUNBUFFERED: "1" # Ensure output is immediately printed to concole instead of being defered to whenever the buffer feels happy
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8080/apis/ccompat/v7"
+      BOOTSTRAP_SERVERS: "broker1:9092"
+      SEPARATOR: "|"
+      TOPIC_USERS: "Users"
+      TOPIC_USERS_EVENT_KEYS: |-
+        "event 0 sample key"
+        | "event 1 sample key"
+        | "event 2 sample key"
+        | "event 3 sample key"
+      TOPIC_USERS_EVENT_VALUES: |-
+        {
+          "id": "event 0 sample ID",
+          "name": "this is a name",
+          "contactDetails": [ { "kind": "emailAddress", "value": "a@b", "primary": true } ],
+          "createdAt": "2024-01-31T19:02Z",
+          "createdBy": "this needs value, no?",
+          "tags": [ "system1/role1", "system2/role1" ]
+        }
+        | {
+          "id": "event 1 sample ID",
+          "name": "also a name",
+          "contactDetails": [ { "kind": "emailAddress", "value": "c@d", "primary": true } ],
+          "createdAt": "2024-01-31T19:02Z",
+          "createdBy": "I think it should have a value",
+          "tags": [ "system1/role1", "system2/role2" ]
+        }
+        | {
+          "id": "event 2 sample ID",
+          "name": "why can't this be a name",
+          "contactDetails": [ { "kind": "emailAddress", "value": "e@f", "primary": true } ],
+          "createdAt": "2024-01-31T19:02Z",
+          "createdBy": "For the sake of the example",
+          "tags": [ "system1/role2", "system2/role1" ]
+        }
+        | {
+          "id": "event 3 sample ID",
+          "name": "dare I try an empty string",
+          "contactDetails": [ { "kind": "emailAddress", "value": "g@h", "primary": true } ],
+          "createdAt": "2024-01-31T19:02Z",
+          "createdBy": "I'll just add lots of stuff",
+          "tags": [ "system1/role2", "system2/role2" ]
+        }
+    entrypoint:
+      - 'python'
+      - '-c'
+      - |
+        # Imports
+        from confluent_kafka import Producer
+        from google.protobuf.json_format import Parse
+        import os, json, urllib.request, subprocess, importlib
+
+        # Define functions
+        def callback(err, event):
+          if err:
+            print(f'Produce to topic {event.topic()} failed for event: {event.key()}')
+          else:
+            print(f"Produced event to topic {event.topic()} with key {event.key()}")
+
+        def get_magic_bytes(schema_id):
+          # Wire format docs: https://docs.confluent.io/platform/current/schema-registry/fundamentals/serdes-develop/index.html#wire-format
+          id_bytes = schema_id.to_bytes(4, byteorder='big')
+          id_byte_array = bytearray(id_bytes)
+          fixed_magic_first_byte = b'\x00'
+          magic_bytes = fixed_magic_first_byte + id_byte_array
+          return magic_bytes
+
+        def serialize_payload(payload, schema_string, schema_type, schema_name):
+          # Valid schema types http://{schema_reg_endpoint}/schemas/types
+          if schema_type == 'JSON':
+            print('Schema type is JSON')
+            print(f"payload is {payload}")
+            payload_encoded = payload.encode('utf-8')
+            payload_byte_array = bytearray(payload_encoded)
+            return payload_byte_array
+          elif schema_type == 'AVRO':
+            print('Schema type is AVRO')
+            raise NotImplementedError("Can't figure out how to make this work")
+          elif schema_type == 'PROTOBUF':
+            print('Schema type is PROTOBUF')
+            raise NotImplementedError("Can't figure out how to make this work")
+            schema_file_path = f"{schema_name}.proto"
+            if not os.path.isfile(schema_file_path):
+              with open(schema_file_path, "w") as text_file:
+                text_file.write(schema_string)
+              subprocess.run([f"protoc -I=. --python_out=. ./{schema_file_path}"])
+            schema_generated_code_path = f"{schema_name}_pb2.py"
+            generated_proto_module = importlib.import_module(schema_generated_code_path)
+            # generated_proto_class = getattr(generated_proto_module, 'ToDo: Figure out how to determine this dynamically?')
+            generated_proto_class = getattr(generated_proto_module, 'Person')
+            generated_proto_instance = generated_proto_class()
+            message = Parse(payload, generated_proto_instance)
+            serialized_message = SerializeToString() # Note that this serializes to "a string of bytes", that is a byte array
+            return serialized_message
+          else:
+            raise ValueError(f"The schema type {schema_type} is not a supported schema type.")
+
+        def ship_payload_to_topic(producer, payload_key, payload_value, topic):
+          schema_registr_address = os.environ['KAFKA_CLUSTERS_0_SCHEMAREGISTRY']
+          schema_subject = f"{topic}-value"
+          schema_metadata_url = f"{schema_registr_address}/subjects/{schema_subject}/versions/latest";
+          with urllib.request.urlopen(schema_metadata_url) as schema_metadata_result:
+            schema_metadata = json.load(schema_metadata_result)
+            schema_id = schema_metadata['id']
+            schema_string = schema_metadata['schema']
+            schema_type = schema_metadata['schemaType']
+
+            payload_value_serialized_bytes = serialize_payload(payload_value, schema_string, schema_type, schema_subject)
+            magic_bytes = get_magic_bytes(schema_id)
+            payload_bytes = magic_bytes + payload_value_serialized_bytes
+            print(f"Producing payload {payload_bytes} to topic {topic} with key {payload_key}")
+            producer.produce(topic, payload_bytes, payload_key, on_delivery=callback)
+
+        # Execute script
+        with open('/kafka/secrets/password.txt') as f:
+          ssl_key_password = f.readline().strip('\n')
+
+        # Config params documentation: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
+        conf = {'bootstrap.servers': os.environ['BOOTSTRAP_SERVERS'],
+          'security.protocol': 'SSL',
+          'ssl.ca.location': '/kafka/secrets/ca.crt',
+          'ssl.key.location': '/kafka/secrets/acl-principal.key',
+          'ssl.key.password': ssl_key_password,
+          'ssl.certificate.location': '/kafka/secrets/acl-principal.crt',
+          'client.id': 'meh'}
+        # print(conf) # Print final config for debug
+
+        print("Setup done and functions creted")
+        # Kafka python producer documentation: https://docs.confluent.io/platform/current/clients/confluent-kafka-python/html/index.html
+        producer = Producer(conf)
+        configured_separator = os.environ['SEPARATOR']
+        configured_topic = os.environ['TOPIC_USERS']
+        event_keys = os.environ['TOPIC_USERS_EVENT_KEYS'].split(configured_separator)
+        event_values = os.environ['TOPIC_USERS_EVENT_VALUES'].split(configured_separator)
+        for event_key, event_value in zip(event_keys, event_values):
+          # print(f"Shipping event key: {event_key} and event value {event.value}")
+          ship_payload_to_topic(producer, event_key, event_value, configured_topic)
+
+        print("Flushing producer (this ensures that messages are actually sent for this short lived producer)")
+        producer.flush()
+
+  consume-demo-events:
+    image: localhost/python-kafka:latest
+    hostname: consume-demo-events
+    container_name: consume-demo-events
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM python:3.12
+        RUN pip install confluent-kafka \
+          && pip install jsonschema \
+          && pip install requests \
+          && pip install protobuf
+    networks:
+      - apps_network
+    depends_on:
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+      create-demo-topics:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      create-acls:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      schema-registry:
+        required: true
+        restart: false
+        condition: service_healthy
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/demo-consumer:/kafka/secrets # Or you can use admin credentials by mounting those secrets as show below instead
+      # - ./ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+    environment:
+      PYTHONUNBUFFERED: "1" # Ensure output is immediately printed to concole instead of being defered to whenever the buffer feels happy
+      BOOTSTRAP_SERVERS: "broker1:9092"
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8080/apis/ccompat/v7"
+      TOPIC: "Users"
+    entrypoint:
+      - 'python'
+      - '-c'
+      - |
+        from confluent_kafka import Consumer
+        from confluent_kafka.serialization import SerializationContext, MessageField
+        from confluent_kafka.schema_registry.json_schema import JSONDeserializer
+        import os, json, urllib.request
+
+        print('Configuring consumer')
+        with open('/kafka/secrets/password.txt') as f:
+          ssl_key_password = f.readline().strip('\n')
+
+        # Config params documentation: https://github.com/confluentinc/librdkafka/blob/master/CONFIGURATION.md
+        conf = {'bootstrap.servers': os.environ['BOOTSTRAP_SERVERS'],
+          'security.protocol': 'SSL',
+          'ssl.ca.location': '/kafka/secrets/ca.crt',
+          'ssl.key.location': '/kafka/secrets/acl-principal.key',
+          'ssl.key.password': ssl_key_password,
+          'ssl.certificate.location': '/kafka/secrets/acl-principal.crt',
+          'group.id': 'cg.demo-consumer.0',
+          'auto.offset.reset': 'earliest',
+          'enable.auto.commit': 'true',
+          'client.id': 'meh'}
+        # print(conf) # Print final config for debug
+
+        consumer = Consumer(conf)
+
+        topic = os.environ['TOPIC']
+        print(f'Retrieving schema for topic {topic} and setting up deserializer')
+
+        schema_registr_address = os.environ['KAFKA_CLUSTERS_0_SCHEMAREGISTRY']
+        schema_subject = f"{topic}-value"
+        schema_metadata_url = f"{schema_registr_address}/subjects/{schema_subject}/versions/latest";
+        with urllib.request.urlopen(schema_metadata_url) as schema_metadata_result:
+          schema_metadata = json.load(schema_metadata_result)
+        schema_id = schema_metadata['id']
+        schema_string = schema_metadata['schema']
+        schema_type = schema_metadata['schemaType']
+
+        if schema_type == 'JSON':
+          deserializer = JSONDeserializer(schema_string)
+        else:
+          raise NotImplementedError("Only json deserializer is implemented for now")
+
+        try:
+          consumer.subscribe([topic])
+          print(f'Consumer subscribed, starting main read loop')
+          while True:
+            msg = consumer.poll(timeout=1.0)
+            if msg is None: continue
+
+            if msg.error():
+                if msg.error().code() == KafkaError._PARTITION_EOF:
+                  # End of partition event
+                  sys.stderr.write('%% %s [%d] reached end at offset %d\n' %
+                                  (msg.topic(), msg.partition(), msg.offset()))
+                elif msg.error():
+                  raise KafkaException(msg.error())
+            else:
+              print(f'Received message you can find at topic {msg.topic()} partition {msg.partition()}, offset {msg.offset()}')
+              deserialized_event = deserializer(msg.value(), SerializationContext(topic, MessageField.VALUE))
+              if deserialized_event is not None:
+                  print(f'Latest event has key {msg.key()} and deserialized value {deserialized_event}')
+        finally:
+          # Close down consumer to commit final offsets.
+          consumer.close()
+
+  kafka-ui:
+    image: ghcr.io/kafbat/kafka-ui
+    hostname: kafka-ui
+    container_name: kafka-ui
+    user: 1000:1001
+    depends_on:
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+      schema-registry:
+        required: true
+        restart: false
+        condition: service_healthy
+    networks:
+      - apps_network
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/kafka-ui:/kafka/secrets
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "lokalmaskin"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8080/apis/ccompat/v7"
+
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: "SSL"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_TYPE: "PEM"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE: "PKCS12"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: "/kafka/secrets/acl-principal.pfx"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: "demo_cert_password"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEY_PASSWORD: "demo_cert_password"
+
+      KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED: "true"
+      KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED: "true"
+      KAFKA_CLUSTERS_0_AUDIT_TOPIC: "__kui-audit-log"
+      KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_MS: "-1" # Time-wise, retain logs forever
+      KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_BYTES: "1048576" # Only keep 1MiB of logs locally
+      KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICSPARTITIONS: "1"
+      KAFKA_CLUSTERS_0_AUDIT_LEVEL: "all"
