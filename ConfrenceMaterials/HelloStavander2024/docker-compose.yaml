@@ -129,6 +129,8 @@ services:
         # Default to 1024, because 4096 is noticeably slow to humans, and default mode here is demo
         RSA_BITS='1024'
         CERT_PASSWORD_LENGTH='32'
+        # Add unique component we can use in CN to ease ca rotation
+        UNIQUE_ENOUGH_STRING=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
         CA_PASSWORD_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/password.txt'
         CA_KEY_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/ca.key'
@@ -164,7 +166,7 @@ services:
           -newkey 'rsa:'$$RSA_BITS \
           -out $$CA_CRT_PATH \
           -days $$VALIDITY_DAYS \
-          -subj '/CN=ca-'$$ENV_NAME'.example.com' \
+          -subj '/CN=ca-'$$ENV_NAME'-'$$UNIQUE_ENOUGH_STRING'.example.com' \
           -passin pass:$$CA_PASSWORD \
           -passout file:$$CA_PASSWORD_PATH 2> /dev/null
 
