@@ -89,6 +89,9 @@ JsonWebKeySet FetchJwks(string url)
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorization();
 
+// builder.Services.AddAuthentication().AddJwtBearer();
+// builder.Services.AddAuthorization();
+
 var app = builder.Build();
 
 app.Logger.LogInformation("Registering schemas");
@@ -141,7 +144,8 @@ app.MapPost("/store", async (HttpRequest req, Stream body, ChunkingProducer chun
         return Results.Ok();
     }
     return Results.StatusCode(StatusCodes.Status500InternalServerError);
-});
+})
+.RequireAuthorization();
 
 app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStateService stateService) =>
 {
@@ -201,7 +205,8 @@ app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStat
     ));
 
     // return Results.Ok(consumer.GetBlobByMetadataAsync(blobChunksMetadata, correlationId, cancellationToken));
-});
+})
+.RequireAuthorization();
 
 app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProducer, OutputStateService stateService) =>
 {
@@ -247,8 +252,8 @@ app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProd
         return Results.Ok();
     }
     return Results.StatusCode(StatusCodes.Status500InternalServerError);
-});
-
+})
+.RequireAuthorization();
 
 app.MapGet("/healthz", () => Results.Ok("Started successfully"));
 app.MapGet("/healthz/live", () => Results.Ok("Alive and well"));
