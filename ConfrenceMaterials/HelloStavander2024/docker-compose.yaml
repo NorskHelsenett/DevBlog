@@ -1494,6 +1494,7 @@ services:
           --set username=$$CUSTOM_USER_NAME \
           --set enabled=true \
           --set emailVerified=true \
+          --set email=$$CUSTOM_USER_NAME@example.com \
           --set firstName="ConfiguredFirstName" \
           --set lastName="ConfigruedLastName" \
           --output
@@ -1509,6 +1510,7 @@ services:
           --set publicClient="true" \
           --set "redirectUris=[\"*\"]" \
           --set "webOrigins=[\"*\"]" \
+          --set directAccessGrantsEnabled=true \
           --set enabled=true \
           --output
         echo "==> Creating demo role in demo realm"
@@ -1523,6 +1525,7 @@ services:
           --rolename $$CUSTOM_ROLE_NAME
         echo "Demo setup done"
         echo "Keeping container alive indefinitely untill it's shut down from the outside"
+        echo "To get user access token run curl --request POST --url http://localhost:8088/realms/demo-realm/protocol/openid-connect/token --header 'Content-Type: application/x-www-form-urlencoded' --data client_id=demo-client --data username=demo-admin --data password=password --data realm=demo-realm --data grant_type=password"
         sleep infinity
     healthcheck:
       test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8088;echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost/auth\nConnection: close\n\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
