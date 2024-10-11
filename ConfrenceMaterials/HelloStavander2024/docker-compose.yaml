@@ -1431,3 +1431,54 @@ services:
       KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_BYTES: "1048576" # Only keep 1MiB of logs locally
       KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICSPARTITIONS: "1"
       KAFKA_CLUSTERS_0_AUDIT_LEVEL: "all"
+
+  keycloak:
+    image: quay.io/keycloak/keycloak
+    container_name: keycloak
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - 8088:8088
+    stop_grace_period: 1s # SIGKILL after 1s during shutdown (no need for grace for this one)
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
+      KC_BOOTSTRAP_ADMIN_PASSWORD: "password"
+      KC_PROXY: "none"
+      KC_LOG_LEVEL: "INFO"
+      KC_HTTP_PORT: "8088"
+      KC_HTTP_HOST: 0.0.0.0
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo "staring app"
+        /opt/keycloak/bin/kc.sh start-dev &
+        echo "Waiting a bit for startup"
+        sleep 10
+        echo "Configuring realms and users"
+        echo "==> Configuring admin connection"
+        /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8088 --realm master --user admin --password password
+        echo "==> Disabling SSL Required on master realm, because source of noice for local dev use"
+        /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE
+        echo "==> Creating demo realm"
+        /opt/keycloak/bin/kcadm.sh create realms -s realm=demo-realm -s enabled=true -s sslRequired=NONE -o
+        echo "==> Creating admin user for demo realm"
+        /opt/keycloak/bin/kcadm.sh create users -r demo-realm -s username=demo-admin -s enabled=true -s emailVerified=true -s firstName="ConfiguredFirstName" -s lastName="ConfigruedLastName" -o
+        echo "==> Setting password for demo admin in demo realm"
+        /opt/keycloak/bin/kcadm.sh set-password -r demo-realm --username demo-admin --new-password password
+        echo "==> Creating demo oauth client registration in demo realm"
+        /opt/keycloak/bin/kcadm.sh create clients -r demo-realm -s clientId=demo-client -s publicClient="true"  -s "redirectUris=[\"http://localhost:8080/*\"]" -s enabled=true  -o
+        echo "==> Creating demo role in demo realm"
+        /opt/keycloak/bin/kcadm.sh create roles -r demo-realm -s name=demo-role -o
+        echo "==> Giving demo admin in demo realm demo role in demo realm"
+        /opt/keycloak/bin/kcadm.sh add-roles -r demo-realm --uusername demo-admin --rolename demo-role
+        echo "Demo setup done"
+        echo "Keeping container alive indefinitely untill it's shut down from the outside"
+        sleep infinity
+    healthcheck:
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8088;echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost\nConnection: close\n\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
+      start_period: "15s"
+      interval: 30s
+      timeout: 10s
+      retries: 3
