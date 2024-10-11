@@ -1440,7 +1440,7 @@ services:
       - apps_network
     ports:
       - 8088:8088
-    stop_grace_period: 1s # SIGKILL after 1s during shutdown (no need for grace for this one)
+    stop_grace_period: 0s # SIGKILL after 0s during shutdown (no need for grace for this one)
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: "admin"
       KC_BOOTSTRAP_ADMIN_PASSWORD: "password"
@@ -1455,7 +1455,19 @@ services:
         echo "staring app"
         /opt/keycloak/bin/kc.sh start-dev &
         echo "Waiting a bit for startup"
-        sleep 10
+        sleep 6
+        while :
+        do
+          exec 3<>/dev/tcp/127.0.0.1/8088
+          echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost\nConnection: close\n\n' >&3
+          if [ $? -eq 0 ]
+          then
+            echo '==> KC Ready'
+            break
+          fi
+          echo "==> KC not ready, sleeping a bit and checking again"
+          sleep 2
+        done
         echo "Configuring realms and users"
         echo "==> Configuring admin connection"
         /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8088 --realm master --user admin --password password
