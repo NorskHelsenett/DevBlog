@@ -1481,44 +1481,44 @@ services:
           --password password
         echo "==> Disabling SSL Required on master realm, because source of noice for local dev use"
         /opt/keycloak/bin/kcadm.sh update realms/master \
-          -s sslRequired=NONE
+          --set sslRequired=NONE
         echo "==> Creating demo realm"
         /opt/keycloak/bin/kcadm.sh create realms \
-          -s realm=$$CUSTOM_REALM_NAME \
-          -s enabled=true \
-          -s sslRequired=NONE \
-          -o
+          --set realm=$$CUSTOM_REALM_NAME \
+          --set enabled=true \
+          --set sslRequired=NONE \
+          --output
         echo "==> Creating admin user for demo realm"
         /opt/keycloak/bin/kcadm.sh create users \
-          -r $$CUSTOM_REALM_NAME \
-          -s username=$$CUSTOM_USER_NAME \
-          -s enabled=true \
-          -s emailVerified=true \
-          -s firstName="ConfiguredFirstName" \
-          -s lastName="ConfigruedLastName" \
-          -o
+          --target-realm $$CUSTOM_REALM_NAME \
+          --set username=$$CUSTOM_USER_NAME \
+          --set enabled=true \
+          --set emailVerified=true \
+          --set firstName="ConfiguredFirstName" \
+          --set lastName="ConfigruedLastName" \
+          --output
         echo "==> Setting password for demo admin in demo realm"
         /opt/keycloak/bin/kcadm.sh set-password \
-          -r $$CUSTOM_REALM_NAME \
+          --target-realm $$CUSTOM_REALM_NAME \
           --username $$CUSTOM_USER_NAME \
           --new-password password
         echo "==> Creating demo oauth client registration in demo realm"
         /opt/keycloak/bin/kcadm.sh create clients \
-          -r $$CUSTOM_REALM_NAME \
-          -s clientId=$$CUSTOM_CLIENT_NAME \
-          -s publicClient="true" \
-          -s "redirectUris=[\"*\"]" \
-          -s "webOrigins=[\"*\"]" \
-          -s enabled=true \
-          -o
+          --target-realm $$CUSTOM_REALM_NAME \
+          --set clientId=$$CUSTOM_CLIENT_NAME \
+          --set publicClient="true" \
+          --set "redirectUris=[\"*\"]" \
+          --set "webOrigins=[\"*\"]" \
+          --set enabled=true \
+          --output
         echo "==> Creating demo role in demo realm"
         /opt/keycloak/bin/kcadm.sh create roles \
-          -r $$CUSTOM_REALM_NAME \
-          -s name=$$CUSTOM_ROLE_NAME \
-          -o
+          --target-realm $$CUSTOM_REALM_NAME \
+          --set name=$$CUSTOM_ROLE_NAME \
+          --output
         echo "==> Giving demo admin in demo realm demo role in demo realm"
         /opt/keycloak/bin/kcadm.sh add-roles \
-          -r $$CUSTOM_REALM_NAME \
+          --target-realm $$CUSTOM_REALM_NAME \
           --uusername $$CUSTOM_USER_NAME \
           --rolename $$CUSTOM_ROLE_NAME
         echo "Demo setup done"
