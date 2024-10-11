@@ -1456,10 +1456,14 @@ services:
         /opt/keycloak/bin/kc.sh start-dev &
         echo "Waiting a bit for startup"
         sleep 6
+        CUSTOM_REALM_NAME=demo-realm
+        CUSTOM_CLIENT_NAME=demo-client
+        CUSTOM_ROLE_NAME=demo-role
+        CUSTOM_USER_NAME=demo-admin
         while :
         do
           exec 3<>/dev/tcp/127.0.0.1/8088
-          echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost\nConnection: close\n\n' >&3
+          echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost/auth\nConnection: close\n\n' >&3
           if [ $? -eq 0 ]
           then
             echo '==> KC Ready'
@@ -1474,22 +1478,22 @@ services:
         echo "==> Disabling SSL Required on master realm, because source of noice for local dev use"
         /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE
         echo "==> Creating demo realm"
-        /opt/keycloak/bin/kcadm.sh create realms -s realm=demo-realm -s enabled=true -s sslRequired=NONE -o
+        /opt/keycloak/bin/kcadm.sh create realms -s realm=$$CUSTOM_REALM_NAME -s enabled=true -s sslRequired=NONE -o
         echo "==> Creating admin user for demo realm"
-        /opt/keycloak/bin/kcadm.sh create users -r demo-realm -s username=demo-admin -s enabled=true -s emailVerified=true -s firstName="ConfiguredFirstName" -s lastName="ConfigruedLastName" -o
+        /opt/keycloak/bin/kcadm.sh create users -r $$CUSTOM_REALM_NAME -s username=$$CUSTOM_USER_NAME -s enabled=true -s emailVerified=true -s firstName="ConfiguredFirstName" -s lastName="ConfigruedLastName" -o
         echo "==> Setting password for demo admin in demo realm"
-        /opt/keycloak/bin/kcadm.sh set-password -r demo-realm --username demo-admin --new-password password
+        /opt/keycloak/bin/kcadm.sh set-password -r $$CUSTOM_REALM_NAME --username $$CUSTOM_USER_NAME --new-password password
         echo "==> Creating demo oauth client registration in demo realm"
-        /opt/keycloak/bin/kcadm.sh create clients -r demo-realm -s clientId=demo-client -s publicClient="true"  -s "redirectUris=[\"http://localhost:8080/*\"]" -s enabled=true  -o
+        /opt/keycloak/bin/kcadm.sh create clients -r $$CUSTOM_REALM_NAME -s clientId=$$CUSTOM_CLIENT_NAME -s publicClient="true" -s "redirectUris=[\"*\"]" -s "webOrigins=[\"*\"]" -s enabled=true -o
         echo "==> Creating demo role in demo realm"
-        /opt/keycloak/bin/kcadm.sh create roles -r demo-realm -s name=demo-role -o
+        /opt/keycloak/bin/kcadm.sh create roles -r $$CUSTOM_REALM_NAME -s name=$$CUSTOM_ROLE_NAME -o
         echo "==> Giving demo admin in demo realm demo role in demo realm"
-        /opt/keycloak/bin/kcadm.sh add-roles -r demo-realm --uusername demo-admin --rolename demo-role
+        /opt/keycloak/bin/kcadm.sh add-roles -r $$CUSTOM_REALM_NAME --uusername $$CUSTOM_USER_NAME --rolename $$CUSTOM_ROLE_NAME
         echo "Demo setup done"
         echo "Keeping container alive indefinitely untill it's shut down from the outside"
         sleep infinity
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8088;echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost\nConnection: close\n\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
+      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8088;echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost/auth\nConnection: close\n\n' >&3;if [ $? -eq 0 ]; then echo 'Healthcheck Successful';exit 0;else echo 'Healthcheck Failed';exit 1;fi;"]
       start_period: "15s"
       interval: 30s
       timeout: 10s
