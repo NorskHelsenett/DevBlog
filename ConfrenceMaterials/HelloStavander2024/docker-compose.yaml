@@ -1474,21 +1474,53 @@ services:
         done
         echo "Configuring realms and users"
         echo "==> Configuring admin connection"
-        /opt/keycloak/bin/kcadm.sh config credentials --server http://localhost:8088 --realm master --user admin --password password
+        /opt/keycloak/bin/kcadm.sh config credentials \
+          --server http://localhost:8088 \
+          --realm master \
+          --user admin \
+          --password password
         echo "==> Disabling SSL Required on master realm, because source of noice for local dev use"
-        /opt/keycloak/bin/kcadm.sh update realms/master -s sslRequired=NONE
+        /opt/keycloak/bin/kcadm.sh update realms/master \
+          -s sslRequired=NONE
         echo "==> Creating demo realm"
-        /opt/keycloak/bin/kcadm.sh create realms -s realm=$$CUSTOM_REALM_NAME -s enabled=true -s sslRequired=NONE -o
+        /opt/keycloak/bin/kcadm.sh create realms \
+          -s realm=$$CUSTOM_REALM_NAME \
+          -s enabled=true \
+          -s sslRequired=NONE \
+          -o
         echo "==> Creating admin user for demo realm"
-        /opt/keycloak/bin/kcadm.sh create users -r $$CUSTOM_REALM_NAME -s username=$$CUSTOM_USER_NAME -s enabled=true -s emailVerified=true -s firstName="ConfiguredFirstName" -s lastName="ConfigruedLastName" -o
+        /opt/keycloak/bin/kcadm.sh create users \
+          -r $$CUSTOM_REALM_NAME \
+          -s username=$$CUSTOM_USER_NAME \
+          -s enabled=true \
+          -s emailVerified=true \
+          -s firstName="ConfiguredFirstName" \
+          -s lastName="ConfigruedLastName" \
+          -o
         echo "==> Setting password for demo admin in demo realm"
-        /opt/keycloak/bin/kcadm.sh set-password -r $$CUSTOM_REALM_NAME --username $$CUSTOM_USER_NAME --new-password password
+        /opt/keycloak/bin/kcadm.sh set-password \
+          -r $$CUSTOM_REALM_NAME \
+          --username $$CUSTOM_USER_NAME \
+          --new-password password
         echo "==> Creating demo oauth client registration in demo realm"
-        /opt/keycloak/bin/kcadm.sh create clients -r $$CUSTOM_REALM_NAME -s clientId=$$CUSTOM_CLIENT_NAME -s publicClient="true" -s "redirectUris=[\"*\"]" -s "webOrigins=[\"*\"]" -s enabled=true -o
+        /opt/keycloak/bin/kcadm.sh create clients \
+          -r $$CUSTOM_REALM_NAME \
+          -s clientId=$$CUSTOM_CLIENT_NAME \
+          -s publicClient="true" \
+          -s "redirectUris=[\"*\"]" \
+          -s "webOrigins=[\"*\"]" \
+          -s enabled=true \
+          -o
         echo "==> Creating demo role in demo realm"
-        /opt/keycloak/bin/kcadm.sh create roles -r $$CUSTOM_REALM_NAME -s name=$$CUSTOM_ROLE_NAME -o
+        /opt/keycloak/bin/kcadm.sh create roles \
+          -r $$CUSTOM_REALM_NAME \
+          -s name=$$CUSTOM_ROLE_NAME \
+          -o
         echo "==> Giving demo admin in demo realm demo role in demo realm"
-        /opt/keycloak/bin/kcadm.sh add-roles -r $$CUSTOM_REALM_NAME --uusername $$CUSTOM_USER_NAME --rolename $$CUSTOM_ROLE_NAME
+        /opt/keycloak/bin/kcadm.sh add-roles \
+          -r $$CUSTOM_REALM_NAME \
+          --uusername $$CUSTOM_USER_NAME \
+          --rolename $$CUSTOM_ROLE_NAME
         echo "Demo setup done"
         echo "Keeping container alive indefinitely untill it's shut down from the outside"
         sleep infinity
