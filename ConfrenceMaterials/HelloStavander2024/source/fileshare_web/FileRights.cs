@@ -1,6 +1,7 @@
 
+[Flags]
 public enum FileRights
 {
-    Owner,
-    Shared
+    Owner = 1,
+    Shared = 2,
 }

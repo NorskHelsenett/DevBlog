@@ -19,7 +19,20 @@ public class FileController
             Size = "1039320 kb",
             Rights = FileRights.Owner
         });
-
+        files.Add(new SecretFile
+        {
+            Id = Guid.Empty,
+            Name = "Random navn 2",
+            Size = "97023 mb",
+            Rights = FileRights.Shared
+        });
+        files.Add(new SecretFile
+        {
+            Id = Guid.Empty,
+            Name = "Random navn 2",
+            Size = "97023 mb",
+            Rights = FileRights.Shared | FileRights.Owner
+        });
         return files;
 
     }
