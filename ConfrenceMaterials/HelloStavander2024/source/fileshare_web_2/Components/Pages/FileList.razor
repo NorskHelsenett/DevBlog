@@ -1,0 +1,41 @@
+@page "/filelist"
+@inject FileController FileController;
+
+<PageTitle>File List</PageTitle>
+
+<h1>Your Files:</h1>
+
+<div>
+<table>
+<thead>
+    <tr>
+    <th>Name</th>
+    <th>Size</th>
+    <th>Rights</th>
+    <th>Delete</th>
+    <th>Download</th>
+    <th>Share</th>
+    </tr>
+</thead>
+<tbody>
+<tr>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+
+</div>
+
+@code {
+    private List<SecretFile> Files = new();
+    protected override void OnInitialized()
+    {
+        Files = FileController.GetFiles();
+    }
+}
