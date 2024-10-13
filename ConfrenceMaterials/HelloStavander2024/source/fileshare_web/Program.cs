@@ -1,12 +1,12 @@
 using fileshare_web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
-
+builder.Services.AddScoped<IChungingProducer>();
 builder.Services.AddScoped<FileController>();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
-
+builder.Services.AddCors();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -18,6 +18,7 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseCors();
 
 app.UseStaticFiles();
 app.UseAntiforgery();

@@ -1,10 +1,12 @@
 public class FileController
 {
     private readonly ILogger<FileController> _logger;
+    private IChungingProducer _chungingProducer;
 
-    public FileController(ILogger<FileController> logger)
+    public FileController(ILogger<FileController> logger, IChungingProducer producer)
     {
         _logger = logger;
+        _chungingProducer = producer;
     }
 
     public List<SecretFile> GetFiles()
@@ -36,5 +38,7 @@ public class FileController
         return files;
 
     }
-
+    public async Task<bool> SaveFile(Stream theFileStream){
+        return await _chungingProducer.ProduceAsync(theFileStream);
+    }
 }
