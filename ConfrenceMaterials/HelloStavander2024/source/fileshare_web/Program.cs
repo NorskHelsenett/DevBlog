@@ -1,7 +1,7 @@
 using fileshare_web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Services.AddScoped<IChungingProducer>();
+builder.Services.AddScoped<IChungingProducer, MockProducer>();
 builder.Services.AddScoped<FileController>();
 // Add services to the container.
 builder.Services.AddRazorComponents()

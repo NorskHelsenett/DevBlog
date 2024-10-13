@@ -43,6 +43,7 @@
     async function uploadFile(filename) {
         let raw_response = await fetch("http://localhost:8080/store", {
             method: "POST",
+            mode: "no-cors",
     @* headers: form_headers, *@
             body: filename,
   });
@@ -58,7 +59,7 @@
     private async Task AddFile(InputFileChangeEventArgs e)
     {
         _logger.LogDebug($"Trying to do some stuff on client side: {e.FileCount}, filename: {e.File.Name} size {e.File.Size}");
-        if(e.File.Size < 250000)
+        @* if(e.File.Size < 250000)
         {
             var didItWork = await FileController.SaveFile(e.File.OpenReadStream());
             if(didItWork){
@@ -66,7 +67,7 @@
                 return;
             }
             _logger.LogWarning("upload had some trouble");
-        }
+        } *@
         _logger.LogDebug("Doing clientside upload, it is probably a laarge file");
         var result = await JS.InvokeAsync<string>("uploadFile", e.File.Name);
         _logger.LogDebug($"result: {result}");
