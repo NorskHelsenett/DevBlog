@@ -1,4 +1,4 @@
-using fileshare_web_2.Components;
+using fileshare_web.Components;
 
 var builder = WebApplication.CreateBuilder(args);
 
