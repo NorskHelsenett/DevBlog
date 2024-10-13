@@ -1,13 +1,14 @@
 @page "/filelist"
 @inject FileController FileController;
-@inject JSRuntime JS;
+@inject IJSRuntime JS;
+@inject ILogger<FileList> _logger;
 
 <PageTitle>File List</PageTitle>
 
 <h1>Your Files:</h1>
 
 <div>
-    <InputFile id="filepicker" class="btn btn-primary" OnChange="@AddFile"/>
+    <InputFile id="filepicker" class="btn btn-primary" OnChange="@AddFile" />
 </div>
 
 <div>
@@ -29,7 +30,7 @@
                     <td>@file.Name</td>
                     <td>@file.Size</td>
                     <td>@file.Rights</td>
-                    <td><button class="btn btn-primary" hidden="@file.Delete" >Delete</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Delete">Delete</button></td>
                     <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
                     <td><button class="btn btn-primary" hidden="@file.Share">Share</button></td>
                 </tr>
@@ -38,7 +39,16 @@
     </table>
 
 </div>
-
+<script>
+    async function uploadFile(filename) {
+        let raw_response = await fetch("http://localhost:8080/store", {
+            method: "POST",
+    @* headers: form_headers, *@
+            body: filename,
+  });
+    return raw_response;
+    }
+</script>
 @code {
     private List<SecretFile> Files = new();
     protected override void OnInitialized()
@@ -47,6 +57,8 @@
     }
     private async Task AddFile(InputFileChangeEventArgs e)
     {
-        var result = await JS.InvokeAsync<string>("fetch",["localhost:8080/store","POST",e.File.Name]);
+        _logger.LogDebug($"Trying to do some stuff on client side: {e.FileCount}, filename: {e.File.Name}");
+        var result = await JS.InvokeAsync<string>("uploadFile", e.File.Name);
+        _logger.LogDebug($"result: {result}");
     }
 }
