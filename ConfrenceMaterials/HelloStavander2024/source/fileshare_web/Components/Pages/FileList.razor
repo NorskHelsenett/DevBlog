@@ -1,9 +1,14 @@
 @page "/filelist"
 @inject FileController FileController;
+@inject JSRuntime JS;
 
 <PageTitle>File List</PageTitle>
 
 <h1>Your Files:</h1>
+
+<div>
+    <InputFile id="filepicker" class="btn btn-primary" OnChange="@AddFile"/>
+</div>
 
 <div>
     <table>
@@ -24,9 +29,9 @@
                     <td>@file.Name</td>
                     <td>@file.Size</td>
                     <td>@file.Rights</td>
-                    <td><button hidden="@file.Delete" >Delete</button></td>
-                    <td><button hidden="@file.Download">Download</button></td>
-                    <td><button hidden="@file.Share">Share</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Delete" >Delete</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Share">Share</button></td>
                 </tr>
             }
         </tbody>
@@ -39,5 +44,9 @@
     protected override void OnInitialized()
     {
         Files = FileController.GetFiles();
+    }
+    private async Task AddFile(InputFileChangeEventArgs e)
+    {
+        var result = await JS.InvokeAsync<string>("fetch",["localhost:8080/store","POST",e.File.Name]);
     }
 }
