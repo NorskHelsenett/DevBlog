@@ -1,4 +1,5 @@
 global using static EnvVarNames;
+using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using KafkaBlobChunking;
@@ -244,7 +245,7 @@ app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProd
 })
 .RequireAuthorization();
 
-app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
+app.MapGet("/list", (HttpContext context, OutputStateService stateService, UserAccessMappingStateService userAccessMappingStateService) =>
 {
     var correlationId = System.Guid.NewGuid().ToString("D");
     if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
@@ -272,13 +273,20 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
     var userIdClaim = context.User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
     app.Logger.LogDebug($"Current user sid: \"{userIdClaim}\"");
 
-    var listOfAllFiles = stateService.ListStoredBlobs(userEmailClaim, correlationId);
+    var filesUserCanSee = userAccessMappingStateService.GetAllUserAccessMappings()
+        .Where(um => um.Owner == userEmailClaim
+            || um.CanChangeAccess.Contains(userEmailClaim)
+            || um.CanChange.Contains(userEmailClaim)
+            || um.CanRetrieve.Contains(userEmailClaim)
+            || um.CanDelete.Contains(userEmailClaim))
+        .Select(um => (BlobName: um.BlobName, Owner: um.Owner))
+        .ToImmutableHashSet();
 
-    var fileNames = listOfAllFiles.Select(bm => bm.BlobName).ToList();
-    var recordSeparator = '\u001E';
-    var separatorString = $"{recordSeparator}";
-    var resultingCollection = fileNames.Aggregate(new StringBuilder(),
-            (current, next) => current.Append(current.Length == 0? "" : separatorString).Append(next))
+    var resultingCollection = stateService.ListStoredBlobs(userEmailClaim, correlationId)
+        .Where(bm => bm.BlobOwnerId == userEmailClaim
+            || filesUserCanSee.Any(x => x.Owner == bm.BlobOwnerId && x.BlobName == bm.BlobName))
+        .Aggregate(new StringBuilder(),
+            (current, next) => current.Append(current.Length == 0 ? "" : "\n").Append($"{next.BlobOwnerId}\t{next.BlobName}"))
         .ToString();
 
     return Results.Ok(resultingCollection);

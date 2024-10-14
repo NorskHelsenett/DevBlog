@@ -11,7 +11,7 @@ public class KafkaFileApiService(HttpClient httpClient)
         {
             var response = await httpClient.SendAsync(request);
             var responseString = await response.Content.ReadAsStringAsync();
-            var responseItems = responseString.Split('\u001E');
+            var responseItems = responseString.Split("\n");
             return responseItems.ToList();
         }
         catch (Exception e) {
