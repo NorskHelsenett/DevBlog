@@ -4,6 +4,7 @@ public static class EnvVarNames
     public const string BIG_PAYLOADS_CHUNKS_TOPIC = nameof(BIG_PAYLOADS_CHUNKS_TOPIC);
     public const string BIG_PAYLOADS_METADATA_TOPIC = nameof(BIG_PAYLOADS_METADATA_TOPIC);
     public const string BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES = nameof(BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES);
+    public const string BIG_PAYLOADS_USER_ACCESS_MAPPING = nameof(BIG_PAYLOADS_USER_ACCESS_MAPPING);
 
     // Kafka client (producer/consumer/admin) configs
     public const string KAFKA_BOOTSTRAP_SERVERS = nameof(KAFKA_BOOTSTRAP_SERVERS);

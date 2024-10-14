@@ -7,8 +7,12 @@ public static class KafkaTopicCreation
     {
         var topicNameChunksTopic = Environment.GetEnvironmentVariable(BIG_PAYLOADS_CHUNKS_TOPIC) ?? throw new Exception($"Environment variable for chunks topic name {BIG_PAYLOADS_CHUNKS_TOPIC} myst be supplied");
         await TryCreateTopicAsync(topicNameChunksTopic);
+
         var topicNameMetadataTopic = Environment.GetEnvironmentVariable(BIG_PAYLOADS_METADATA_TOPIC) ?? throw new Exception($"Environment variable for blob metadata topic name {BIG_PAYLOADS_METADATA_TOPIC} myst be supplied");;
         await TryCreateTopicAsync(topicNameMetadataTopic);
+
+        var topicUserAccessMapping = Environment.GetEnvironmentVariable(BIG_PAYLOADS_USER_ACCESS_MAPPING) ?? throw new Exception($"Environment variable for blob metadata topic name {BIG_PAYLOADS_USER_ACCESS_MAPPING} myst be supplied");;
+        await TryCreateTopicAsync(topicUserAccessMapping);
     }
 
     public static async Task TryCreateTopicAsync(string topic)
