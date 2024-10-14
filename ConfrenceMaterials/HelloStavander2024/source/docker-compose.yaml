@@ -64,6 +64,7 @@ services:
       BIG_PAYLOADS_CHUNKS_TOPIC: "workshop-big-payloads-chunks"
       BIG_PAYLOADS_METADATA_TOPIC: "workshop-big-payloads-metadata"
       BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES: "256"
+      BIG_PAYLOADS_USER_ACCESS_MAPPING: "workshop-big-payloads-user-access-mapping"
 
       # Auth config
       OIDC_IDP_ADDRESS_FOR_SERVER: "http://keycloak:8088/realms/demo-realm"
