@@ -26,11 +26,11 @@ Content-Type: application/json
 
 {
     "BlobName": "sample/blob/ipsums/dino.whatevs",
-    "Owner": "demo-admin",
-    "CanChangeAccess": ["demo-admin"],
-    "CanRetrieve": ["admin", "demo-admin", "user"],
-    "CanChange": ["admin"],
-    "CanDelete": ["user"]
+    "Owner": "demo-admin@example.com",
+    "CanChangeAccess": ["demo-admin@example.com"],
+    "CanRetrieve": ["admin@example.com", "demo-admin@example.com", "user@example.com"],
+    "CanChange": ["admin@example.com"],
+    "CanDelete": ["user@example.com"]
 }
 
 ### Retrieve user access mapping

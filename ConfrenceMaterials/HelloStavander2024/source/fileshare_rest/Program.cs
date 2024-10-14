@@ -300,8 +300,6 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
     var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
     app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
 
-    var todoRetrieveCollectionOfAccessRules = new List<UserAccessMapping>();
-    // Check if user is in "owners" list
     var updatedUserAccessMapping = new UserAccessMapping
     {
         BlobName = apiParamUserAccessMapping.BlobName,
@@ -315,7 +313,39 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
         CorrelationId = correlationId,
     };
 
-    var internalBlobId = GetBlobId(nameOfOwner: updatedUserAccessMapping.Owner, suppliedBlobName: updatedUserAccessMapping.BlobName);
+    var internalBlobId = GetBlobId(nameOfOwner: apiParamUserAccessMapping.Owner, suppliedBlobName: apiParamUserAccessMapping.BlobName);
+    var accessMappingAlreadyExists = userAccessMappingStateService.TryGetUserAccessMapping(internalBlobId, out var preExistingAccessMapping);
+    if (!accessMappingAlreadyExists && apiParamUserAccessMapping.Owner != userEmailClaim)
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to set access configs for object that doesn't belong to them nor exists yet. This may indicate that they're trying to highjack a future resource belonging to someone else. The permissions they tried to set were {updatedUserAccessMapping}. Noping out");
+        return Results.StatusCode(statusCode: StatusCodes.Status403Forbidden);
+    }
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && (preExistingAccessMapping.Owner != userEmailClaim || preExistingAccessMapping.CanChangeAccess.Contains(userEmailClaim)))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to set access configs for object that they neither own nor have access to change access rights for. This may indicate that they're trying to highjack a current belonging to someone else. The permissions they tried to set were {updatedUserAccessMapping}. Noping out");
+        return Results.StatusCode(statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && preExistingAccessMapping.Owner != apiParamUserAccessMapping.Owner)
+    {
+        app.Logger.LogInformation($"CorrelationId {correlationId} user {userEmailClaim} tried to change owner, which is not currently supported. The permissions they tried to set were {updatedUserAccessMapping}.");
+        return Results.Text(
+            content: $"Changing owner is not supported",
+            contentType: "text/html",
+            contentEncoding: Encoding.UTF8,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && preExistingAccessMapping.BlobName != apiParamUserAccessMapping.BlobName)
+    {
+        app.Logger.LogInformation($"CorrelationId {correlationId} user {userEmailClaim} tried to change target resource, which is not currently supported. The permissions they tried to set were {updatedUserAccessMapping}.");
+        return Results.Text(
+            content: $"Changing target resource is not supported",
+            contentType: "text/html",
+            contentEncoding: Encoding.UTF8,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+
     app.Logger.LogInformation($"CorrelationId {correlationId} This is the updated user access mapping object {updatedUserAccessMapping}");
     var produceResult = await userAccessMappingProducer.ProduceUserAccessMappingAsync(updatedUserAccessMapping, internalBlobId, cancellationToken);
     if (produceResult)

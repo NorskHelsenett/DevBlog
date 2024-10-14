@@ -4,9 +4,14 @@ public class UserAccessMappingStateService
 {
     private Dictionary<string, UserAccessMapping> _userAccessMappings = [];
 
-    public UserAccessMapping GetUserAccessMapping(string blobId)
+    public bool TryGetUserAccessMapping(string blobId, out UserAccessMapping? result)
     {
-        return _userAccessMappings[blobId];
+        if (_userAccessMappings.TryGetValue(blobId, out result))
+        {
+            return true;
+        }
+        result = default;
+        return false;
     }
 
     public void SetUserAccessMapping(string blobId, UserAccessMapping mapping)
