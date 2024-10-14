@@ -110,6 +110,15 @@ app.MapPost("/store", async (HttpRequest req, Stream body, ChunkingProducer chun
             correlationId = headerCorrelationId.ToString();
         }
     }
+
+    var userEmailClaim = req.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.StatusCode(StatusCodes.Status401Unauthorized);
+    }
+
     var suppliedBlobName = "";
     if(req.Headers.TryGetValue("X-Blob-Name", out Microsoft.Extensions.Primitives.StringValues headerSuppliedBlobName))
     {
@@ -120,8 +129,6 @@ app.MapPost("/store", async (HttpRequest req, Stream body, ChunkingProducer chun
     }
     var cancellationToken = req.HttpContext.RequestAborted;
 
-    var userEmailClaim = req.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
     var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
 
     app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" to store blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
@@ -145,6 +152,15 @@ app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStat
             correlationId = headerCorrelationId.ToString();
         }
     }
+
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Task.FromResult(Results.StatusCode(StatusCodes.Status401Unauthorized));
+    }
+
     var suppliedBlobName = "";
     if(context.Request.Headers.TryGetValue("X-Blob-Name", out Microsoft.Extensions.Primitives.StringValues headerSuppliedBlobName))
     {
@@ -155,8 +171,6 @@ app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStat
     }
     var cancellationToken = context.Request.HttpContext.RequestAborted;
 
-    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
     var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
 
     app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" for blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
@@ -207,6 +221,15 @@ app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProd
             correlationId = headerCorrelationId.ToString();
         }
     }
+
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.Unauthorized();
+    }
+
     var suppliedBlobName = "";
     if(context.Request.Headers.TryGetValue("X-Blob-Name", out Microsoft.Extensions.Primitives.StringValues headerSuppliedBlobName))
     {
@@ -217,8 +240,6 @@ app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProd
     }
     var cancellationToken = context.Request.HttpContext.RequestAborted;
 
-    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
     var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
 
     app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" to delete blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
@@ -270,6 +291,11 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService, UserA
     // Beware security tradeoff if you trust multiple external identity providers (employee has been terminated, but do they still have a private facebook/apple/google account, which they gladly say the user has logged in to with their old account registerd with the email @company.tld?)
     var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
     app.Logger.LogDebug($"Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.Unauthorized();
+    }
     var userIdClaim = context.User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
     app.Logger.LogDebug($"Current user sid: \"{userIdClaim}\"");
 
@@ -307,6 +333,11 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
     var cancellationToken = context.Request.HttpContext.RequestAborted;
     var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
     app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.Unauthorized();
+    }
 
     var updatedUserAccessMapping = new UserAccessMapping
     {
@@ -376,7 +407,19 @@ app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateSe
         }
     }
     app.Logger.LogInformation($"CorrelationId {correlationId} Received request to retrieve list of user access mappings");
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.Unauthorized();
+    }
     var allMappings = userAccessMappingStateService.GetAllUserAccessMappings()
+        .Where(uam => uam.Owner == userEmailClaim
+            || uam.CanChangeAccess.Contains(userEmailClaim)
+            || uam.CanChange.Contains(userEmailClaim)
+            || uam.CanRetrieve.Contains(userEmailClaim)
+            || uam.CanDelete.Contains(userEmailClaim))
         .Select(m => new ApiParamUserAccessMapping
         {
             BlobName = m.BlobName,
