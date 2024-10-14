@@ -1,6 +1,7 @@
 global using static EnvVarNames;
 using System.Security.Claims;
 using System.Text;
+using KafkaBlobChunking;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -115,12 +116,13 @@ app.MapPost("/store", async (HttpRequest req, Stream body, ChunkingProducer chun
     }
     var cancellationToken = req.HttpContext.RequestAborted;
 
-    var ownerId = "ToDo";
-    var internalBlobId = GetBlobId(nameOfOwner: ownerId, suppliedBlobName: suppliedBlobName);
+    var userEmailClaim = req.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
 
-    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{ownerId}\" to store blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
+    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" to store blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
 
-    var produceSuccessful = await chunkingProducer.ProduceAsync(body, blobId: internalBlobId, ownerId: ownerId, callersBlobName: suppliedBlobName, correlationId: correlationId, cancellationToken);
+    var produceSuccessful = await chunkingProducer.ProduceAsync(body, blobId: internalBlobId, ownerId: userEmailClaim, callersBlobName: suppliedBlobName, correlationId: correlationId, cancellationToken);
     if (produceSuccessful)
     {
         return Results.Ok();
@@ -149,16 +151,17 @@ app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStat
     }
     var cancellationToken = context.Request.HttpContext.RequestAborted;
 
-    var ownerId = "ToDo";
-    var internalBlobId = GetBlobId(nameOfOwner: ownerId, suppliedBlobName: suppliedBlobName);
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
 
-    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{ownerId}\" for blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
+    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" for blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
 
     context.Response.Headers.Append("X-Correlation-Id", correlationId);
 
     if(!stateService.TryRetrieve(internalBlobId, out var blobChunksMetadata) || blobChunksMetadata == null)
     {
-        app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{ownerId}\" for blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\" resulted in not found");
+        app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" for blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\" resulted in not found");
         return Task.FromResult(Results.NotFound());
     }
 
@@ -210,16 +213,17 @@ app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProd
     }
     var cancellationToken = context.Request.HttpContext.RequestAborted;
 
-    var ownerId = "ToDo";
-    var internalBlobId = GetBlobId(nameOfOwner: ownerId, suppliedBlobName: suppliedBlobName);
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
 
-    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{ownerId}\" to delete blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
+    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" to delete blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
 
     context.Response.Headers.Append("X-Correlation-Id", correlationId);
 
     if(!stateService.TryRetrieve(internalBlobId, out var blobChunksMetadata) || blobChunksMetadata == null)
     {
-        app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{ownerId}\" to delete blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\" resulted in not found");
+        app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" to delete blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\" resulted in not found");
         return Results.NotFound();
     }
 
@@ -275,6 +279,50 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
         .ToString();
 
     return Results.Ok(resultingCollection);
+})
+.RequireAuthorization();
+
+app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context) =>
+{
+    var correlationId = System.Guid.NewGuid().ToString("D");
+    if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
+    {
+        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
+        {
+            correlationId = headerCorrelationId.ToString();
+        }
+    }
+
+    // var suppliedBlobName = "";
+    // if(context.Request.Headers.TryGetValue("X-Blob-Name", out Microsoft.Extensions.Primitives.StringValues headerSuppliedBlobName))
+    // {
+    //     if(!string.IsNullOrWhiteSpace(headerSuppliedBlobName.ToString()))
+    //     {
+    //         suppliedBlobName = headerSuppliedBlobName.ToString();
+    //     }
+    // }
+
+    var cancellationToken = context.Request.HttpContext.RequestAborted;
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+
+    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: apiParamUserAccessMapping.BlobName);
+
+    var todoRetrieveCollectionOfAccessRules = new List<UserAccessMapping>();
+    // Check if user is in "owners" list
+    var updatedUserAccessMapping = new UserAccessMapping
+    {
+        ResourceId = internalBlobId,
+        OwnerId = { apiParamUserAccessMapping.OwnerIds },
+        CanRetrieve = { apiParamUserAccessMapping.CanRetrieve },
+        CanChange = { apiParamUserAccessMapping.CanChange },
+        CanDelete = { apiParamUserAccessMapping.CanDelete },
+        UpdatedAt = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow),
+        UpdatedBy = userEmailClaim,
+        CorrelationId = correlationId,
+    };
+
+    app.Logger.LogInformation($"CorrelationId {correlationId} This is the updated user access mapping object {updatedUserAccessMapping}");
 })
 .RequireAuthorization();
 

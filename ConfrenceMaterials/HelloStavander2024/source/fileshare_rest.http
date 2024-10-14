@@ -16,6 +16,21 @@ curl --request POST \
  --data realm=demo-realm \
  --data grant_type=password
 
+### Update user access mapping
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+POST {{baseurl}}/updateUserAccessMapping
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "BlobName": "sample/blob/ipsums/dino.whatevs",
+    "OwnerIds": ["demo-admin"],
+    "CanRetrieve": ["admin", "demo-admin", "user"],
+    "CanChange": ["admin"],
+    "CanDelete": ["user"]
+}
+
 ### Poke retrieve endpoint without auth - this should fail
 
 GET {{baseurl}}/retrieve
