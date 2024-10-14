@@ -6,7 +6,7 @@ option csharp_namespace = "KafkaBlobChunking";
 
 message UserAccessMapping {
     string ResourceId = 1;
-    repeated string OwnerId = 2;
+    repeated string CanChangeAccess = 2;
     repeated string CanRetrieve = 3;
     repeated string CanChange = 4; // Should impy delete
     repeated string CanDelete = 5; // For the cases where you want someone to be able to clean up, but not extract the content

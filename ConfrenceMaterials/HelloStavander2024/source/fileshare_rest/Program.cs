@@ -313,7 +313,7 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
     var updatedUserAccessMapping = new UserAccessMapping
     {
         ResourceId = internalBlobId,
-        OwnerId = { apiParamUserAccessMapping.OwnerIds },
+        CanChangeAccess = { apiParamUserAccessMapping.CanChangeAccess },
         CanRetrieve = { apiParamUserAccessMapping.CanRetrieve },
         CanChange = { apiParamUserAccessMapping.CanChange },
         CanDelete = { apiParamUserAccessMapping.CanDelete },

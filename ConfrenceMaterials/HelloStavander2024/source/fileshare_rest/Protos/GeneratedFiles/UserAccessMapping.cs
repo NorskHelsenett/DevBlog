@@ -25,16 +25,16 @@ namespace KafkaBlobChunking {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "ChdVc2VyQWNjZXNzTWFwcGluZy5wcm90bxofZ29vZ2xlL3Byb3RvYnVmL3Rp",
-            "bWVzdGFtcC5wcm90byLMAQoRVXNlckFjY2Vzc01hcHBpbmcSEgoKUmVzb3Vy",
-            "Y2VJZBgBIAEoCRIPCgdPd25lcklkGAIgAygJEhMKC0NhblJldHJpZXZlGAMg",
-            "AygJEhEKCUNhbkNoYW5nZRgEIAMoCRIRCglDYW5EZWxldGUYBSADKAkSLQoJ",
-            "VXBkYXRlZEF0GAYgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIR",
-            "CglVcGRhdGVkQnkYByABKAkSFQoNQ29ycmVsYXRpb25JZBgIIAEoCUIUqgIR",
-            "S2Fma2FCbG9iQ2h1bmtpbmdiBnByb3RvMw=="));
+            "bWVzdGFtcC5wcm90byLUAQoRVXNlckFjY2Vzc01hcHBpbmcSEgoKUmVzb3Vy",
+            "Y2VJZBgBIAEoCRIXCg9DYW5DaGFuZ2VBY2Nlc3MYAiADKAkSEwoLQ2FuUmV0",
+            "cmlldmUYAyADKAkSEQoJQ2FuQ2hhbmdlGAQgAygJEhEKCUNhbkRlbGV0ZRgF",
+            "IAMoCRItCglVcGRhdGVkQXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGlt",
+            "ZXN0YW1wEhEKCVVwZGF0ZWRCeRgHIAEoCRIVCg1Db3JyZWxhdGlvbklkGAgg",
+            "ASgJQhSqAhFLYWZrYUJsb2JDaHVua2luZ2IGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.TimestampReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::KafkaBlobChunking.UserAccessMapping), global::KafkaBlobChunking.UserAccessMapping.Parser, new[]{ "ResourceId", "OwnerId", "CanRetrieve", "CanChange", "CanDelete", "UpdatedAt", "UpdatedBy", "CorrelationId" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::KafkaBlobChunking.UserAccessMapping), global::KafkaBlobChunking.UserAccessMapping.Parser, new[]{ "ResourceId", "CanChangeAccess", "CanRetrieve", "CanChange", "CanDelete", "UpdatedAt", "UpdatedBy", "CorrelationId" }, null, null, null, null)
           }));
     }
     #endregion
@@ -77,7 +77,7 @@ namespace KafkaBlobChunking {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public UserAccessMapping(UserAccessMapping other) : this() {
       resourceId_ = other.resourceId_;
-      ownerId_ = other.ownerId_.Clone();
+      canChangeAccess_ = other.canChangeAccess_.Clone();
       canRetrieve_ = other.canRetrieve_.Clone();
       canChange_ = other.canChange_.Clone();
       canDelete_ = other.canDelete_.Clone();
@@ -105,15 +105,15 @@ namespace KafkaBlobChunking {
       }
     }
 
-    /// <summary>Field number for the "OwnerId" field.</summary>
-    public const int OwnerIdFieldNumber = 2;
-    private static readonly pb::FieldCodec<string> _repeated_ownerId_codec
+    /// <summary>Field number for the "CanChangeAccess" field.</summary>
+    public const int CanChangeAccessFieldNumber = 2;
+    private static readonly pb::FieldCodec<string> _repeated_canChangeAccess_codec
         = pb::FieldCodec.ForString(18);
-    private readonly pbc::RepeatedField<string> ownerId_ = new pbc::RepeatedField<string>();
+    private readonly pbc::RepeatedField<string> canChangeAccess_ = new pbc::RepeatedField<string>();
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public pbc::RepeatedField<string> OwnerId {
-      get { return ownerId_; }
+    public pbc::RepeatedField<string> CanChangeAccess {
+      get { return canChangeAccess_; }
     }
 
     /// <summary>Field number for the "CanRetrieve" field.</summary>
@@ -213,7 +213,7 @@ namespace KafkaBlobChunking {
         return true;
       }
       if (ResourceId != other.ResourceId) return false;
-      if(!ownerId_.Equals(other.ownerId_)) return false;
+      if(!canChangeAccess_.Equals(other.canChangeAccess_)) return false;
       if(!canRetrieve_.Equals(other.canRetrieve_)) return false;
       if(!canChange_.Equals(other.canChange_)) return false;
       if(!canDelete_.Equals(other.canDelete_)) return false;
@@ -228,7 +228,7 @@ namespace KafkaBlobChunking {
     public override int GetHashCode() {
       int hash = 1;
       if (ResourceId.Length != 0) hash ^= ResourceId.GetHashCode();
-      hash ^= ownerId_.GetHashCode();
+      hash ^= canChangeAccess_.GetHashCode();
       hash ^= canRetrieve_.GetHashCode();
       hash ^= canChange_.GetHashCode();
       hash ^= canDelete_.GetHashCode();
@@ -257,7 +257,7 @@ namespace KafkaBlobChunking {
         output.WriteRawTag(10);
         output.WriteString(ResourceId);
       }
-      ownerId_.WriteTo(output, _repeated_ownerId_codec);
+      canChangeAccess_.WriteTo(output, _repeated_canChangeAccess_codec);
       canRetrieve_.WriteTo(output, _repeated_canRetrieve_codec);
       canChange_.WriteTo(output, _repeated_canChange_codec);
       canDelete_.WriteTo(output, _repeated_canDelete_codec);
@@ -287,7 +287,7 @@ namespace KafkaBlobChunking {
         output.WriteRawTag(10);
         output.WriteString(ResourceId);
       }
-      ownerId_.WriteTo(ref output, _repeated_ownerId_codec);
+      canChangeAccess_.WriteTo(ref output, _repeated_canChangeAccess_codec);
       canRetrieve_.WriteTo(ref output, _repeated_canRetrieve_codec);
       canChange_.WriteTo(ref output, _repeated_canChange_codec);
       canDelete_.WriteTo(ref output, _repeated_canDelete_codec);
@@ -316,7 +316,7 @@ namespace KafkaBlobChunking {
       if (ResourceId.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(ResourceId);
       }
-      size += ownerId_.CalculateSize(_repeated_ownerId_codec);
+      size += canChangeAccess_.CalculateSize(_repeated_canChangeAccess_codec);
       size += canRetrieve_.CalculateSize(_repeated_canRetrieve_codec);
       size += canChange_.CalculateSize(_repeated_canChange_codec);
       size += canDelete_.CalculateSize(_repeated_canDelete_codec);
@@ -344,7 +344,7 @@ namespace KafkaBlobChunking {
       if (other.ResourceId.Length != 0) {
         ResourceId = other.ResourceId;
       }
-      ownerId_.Add(other.ownerId_);
+      canChangeAccess_.Add(other.canChangeAccess_);
       canRetrieve_.Add(other.canRetrieve_);
       canChange_.Add(other.canChange_);
       canDelete_.Add(other.canDelete_);
@@ -384,7 +384,7 @@ namespace KafkaBlobChunking {
             break;
           }
           case 18: {
-            ownerId_.AddEntriesFrom(input, _repeated_ownerId_codec);
+            canChangeAccess_.AddEntriesFrom(input, _repeated_canChangeAccess_codec);
             break;
           }
           case 26: {
@@ -438,7 +438,7 @@ namespace KafkaBlobChunking {
             break;
           }
           case 18: {
-            ownerId_.AddEntriesFrom(ref input, _repeated_ownerId_codec);
+            canChangeAccess_.AddEntriesFrom(ref input, _repeated_canChangeAccess_codec);
             break;
           }
           case 26: {
