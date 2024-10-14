@@ -27,6 +27,9 @@ services:
       LOGGING__LOGLEVEL__MICROSOFT: "Warning"
       LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
 
+      # App Config
+      FILESHARE_WEB_REMOTE_FILE_API_ADDRESS: "http://fileshare_rest:8080"
+
       # Auth config
       OIDC_IDP_ADDRESS_FOR_SERVER: "http://keycloak:8088/realms/demo-realm"
       OIDC_IDP_ADDRESS_FOR_USERS: "http://localhost:8088/realms/demo-realm"
