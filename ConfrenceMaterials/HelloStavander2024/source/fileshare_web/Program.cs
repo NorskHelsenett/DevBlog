@@ -1,3 +1,4 @@
+using fileshare_web;
 using fileshare_web.Components;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -8,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<IChungingProducer, MockProducer>();
 builder.Services.AddScoped<FileController>();
+builder.Services.AddScoped<KafkaFileApiService>();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();

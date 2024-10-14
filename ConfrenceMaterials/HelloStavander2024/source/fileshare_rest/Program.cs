@@ -268,7 +268,7 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
     var listOfAllFiles = stateService.ListStoredBlobs(userEmailClaim, correlationId);
 
     var fileNames = listOfAllFiles.Select(bm => bm.BlobName).ToList();
-    var recordSeparator = '\u001e';
+    var recordSeparator = '\u001E';
     var separatorString = $"{recordSeparator}";
     var resultingCollection = fileNames.Aggregate(new StringBuilder(),
             (current, next) => current.Append(current.Length == 0? "" : separatorString).Append(next))
