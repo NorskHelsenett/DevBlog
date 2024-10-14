@@ -1,7 +1,9 @@
 @page "/filelist"
+@using Microsoft.AspNetCore.Authentication
 @inject FileController FileController;
 @inject IJSRuntime JS;
 @inject ILogger<FileList> _logger;
+@inject IHttpContextAccessor HttpContextAccessor
 
 <PageTitle>File List</PageTitle>
 
@@ -69,6 +71,7 @@
             _logger.LogWarning("upload had some trouble");
         } *@
         _logger.LogDebug("Doing clientside upload, it is probably a laarge file");
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
         var result = await JS.InvokeAsync<string>("uploadFile", e.File.Name);
         _logger.LogDebug($"result: {result}");
     }
