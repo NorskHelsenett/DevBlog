@@ -328,7 +328,16 @@ app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateSe
         }
     }
     app.Logger.LogInformation($"CorrelationId {correlationId} Received request to retrieve list of user access mappings");
-    var allMappings = userAccessMappingStateService.GetAllUserAccessMappings();
+    var allMappings = userAccessMappingStateService.GetAllUserAccessMappings()
+        .Select(m => new ApiParamUserAccessMapping
+        {
+            BlobName = m.BlobName,
+            Owner = m.Owner,
+            CanChangeAccess = m.CanChangeAccess.ToArray(),
+            CanChange = m.CanChangeAccess.ToArray(),
+            CanRetrieve = m.CanRetrieve.ToArray(),
+            CanDelete = m.CanDelete.ToArray()
+        });
     return Results.Json(allMappings);
 }).RequireAuthorization();
 
