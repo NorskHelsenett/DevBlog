@@ -35,4 +35,104 @@ X-Blob-Name: ToDo: Example value for now
 GET {{baseurl}}/list
 Authorization: Bearer {{authToken}}
 
+### Store dinsaur ipsum, so that there is something to store/retireve/list
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+
+POST {{baseurl}}/store
+Authorization: Bearer {{authToken}}
+X-Blob-Name: sample/blob/ipsums/dino.whatevs
+
+Aachenosaurus Abelisaurus Abrosaurus Abydosaurus Acanthopholis Achillesaurus
+Achillobator Acristavus, Apatodon Ostafrikasaurus Scleromochlus Koreanosaurus
+Hesperosaurus Delapparentia Gojirasaurus, Hypselorhachis Dasygnathus Glyptodontopelta
+Gryponyx Bonatitan Tyrannosaurus. Longisquama Coloradia Fukuisaurus Atlasaurus
+Peltosaurus Eocursor Secernosaurus Xenoceratops Eucnemesaurus, Dilong
+Zhuchengceratops Haya Manidens Nomingia Parksosaurus Luoyanggia, Serendipaceratops
+Lirainosaurus Kaijiangosaurus Teinurosaurus Galesaurus Triassolestes Dryptosauroides.
+Unaysaurus Jiangjunosaurus Rahona Zhuchengceratops Piatnitzkysaurus Atlantosaurus
+Panamericansaurus Xiaosaurus Graciliraptor Cristatusaurus, Morinosaurus Jeyawati
+Orodromeus Saurornithoides Dollodon Spondylosoma Spinostropheus Lamaceratops
+Futabasaurus, Cedarpelta Pectinodon Draconyx Hadrosaurus Datousaurus Archaeornis
+Peltosaurus Bambiraptor. Plateosaurus Achillesaurus Tianzhenosaurus Alvarezsaurus
+Ichthyovenator Lukousaurus Coloradia Luanchuanraptor, Spinostropheus Haplocheirus
+Agustinia Lambeosaurus Cathartesaura Dandakosaurus Zhuchengosaurus Basutodon,
+Xenotarsosaurus Oligosaurus Secernosaurus Dinheirosaurus Mapusaurus Europasaurus.
+Lusitanosaurus Brachytaenius Erlicosaurus Aucasaurus Poekilopleuron Zizhongosaurus
+Malawisaurus Pellegrinisaurus Morosaurus Sphaerotholus, Triceratops Deinocheirus
+Hypselorhachis Tomodon Leptorhynchos Amygdalodon Algoasaurus Piatnitzkysaurus,
+Segisaurus Olorotitan Gargoyleosaurus Campylodon Aegyptosaurus Jenghizkhan
+Claorhynchus Camarillasaurus. Arctosaurus Majungatholus Ceratosaurus Tochisaurus
+Dianchungosaurus Haya Paranthodon Kaatedocus Patagosaurus, Cruxicheiros
+Coloradisaurus Qiupalong Sahaliyania Lapparentosaurus Gracilisuchus Gresslyosaurus,
+Futabasaurus Epachthosaurus Valdosaurus Kayentavenator Protoavis Bonapartenykus
+Talenkauen.  Tienshanosaurus Protoavis Petrobrasaurus Alocodon Homalocephale Rapator
+Kangnasaurus Sauropelta Elachistosuchus Crichtonsaurus Macelognathus Eupodosaurus,
+Yaverlandia Griphornis Gwyneddosaurus Orodromeus Nanyangosaurus Leptoceratops Talos
+Heterodontosaurus Veterupristisaurus Yutyrannus. Sphenosuchus Apatodon Protohadros
+Claosaurus Janenschia Tawa Bainoceratops Cheneosaurus Citipati, Lamaceratops
+Brontomerus Albalophosaurus Torilion Tonganosaurus Epidexipteryx Augustia,
+Cryolophosaurus Pachyrhinosaurus Bienosaurus Atlantosaurus Palaeocursornis Bagaraatan
+Brachylophosaurus. Kerberosaurus Microhadrosaurus Tanystrosuchus Ohmdenosaurus
+Mochlodon Megaraptor Eomamenchisaurus Hypselorhachis Austrocheirus Zapalasaurus,
+Xixiposaurus Ganzhousaurus Jiangjunosaurus Opisthocoelicaudia Syntarsus Lagosuchus
+Yunnanosaurus Dravidosaurus Zhuchengceratops, Majungatholus Stegopelta Caseosaurus
+Vitakrisaurus Leaellynasaura Eoabelisaurus Brontomerus Sinornithosaurus. Iliosuchus
+Ornithosuchus Dyoplosaurus Scleromochlus Centrosaurus Claosaurus Basutodon
+Euronychodon Shixinggia Limusaurus Plateosaurus, Paluxysaurus Xenotarsosaurus
+Onychosaurus Australodocus Actiosaurus Crataeomus Sinocoelurus Elaphrosaurus
+Euskelosaurus, Orodromeus Narambuenatitan Hypsirophus Tyrannosaurus Nanshiungosaurus
+Delapparentia Protecovasaurus Dandakosaurus Chiayusaurus. Hulsanpes Nedcolbertia
+Linhenykus Xenoceratops Deltadromeus Aggiosaurus Protohadros, Edmontosaurus
+Bagaceratops Neuquensaurus Tomodon Bonitasaura Caenagnathus, Jiangjunosaurus
+Brachypodosaurus Paleosaurus Pachyspondylus Lufengosaurus. Antarctopelta Dasygnathus
+Piatnitzkysaurus Barapasaurus Jintasaurus Albertadromeus Alocodon Gobiceratops,
+Camarillasaurus Caenagnathus Thecocoelurus Velocisaurus Goyocephale Adeopapposaurus,
+Jingshanosaurus Bradycneme Sinosaurus Omeisaurus Atlasaurus Valdosaurus.
+Compsognathus Linhenykus Centrosaurus Leyesaurus Agustinia, Bahariasaurus Daxiatitan
+Pachyspondylus, Minotaurasaurus Ornatotholus Thescelosaurus.
+
+### Store ramen ipsum, so that there is something to store/retireve/list
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+
+POST {{baseurl}}/store
+Authorization: Bearer {{authToken}}
+X-Blob-Name: sample/blob/ipsums/ramen.txt
+
+Soy sauce salt miso butter roasted pork slices flavoured oil yuzu, seasoned egg spinach chicken stock Nagoya
+leek mustard greens, minced garlic tsukemen lard Tokyo corn. Roasted pork slices minced garlic nori Yokohama
+miso corn ramen burger Nissin instant cup ramen Nagoya, seasoned egg tsukemen soy milk abura soba Tokushima
+ground black pepper butter bean sprouts spinach, yuzu sesame oil Tokyo wood ear mushroom vinegar scallions.
+Kagoshima yuzu soy milk Asahikawa butter sesame oil wood ear mushroom abura soba ramen burger, Tokushima Tokyo
+rice vinegar bean sprouts salt spicy bean paste mustard greens, chicken stock Hakodate pork bones nori roasted
+pork slices lard leek. Miso Yokohama curry yuzu minced garlic seasoned egg wood ear mushroom rice, lard ramen
+burger salt Hakata scallions flavoured oil Nissin instant cup ramen Kagoshima, bean sprouts sesame oil Wakayama
+spicy bean paste Sapporo mustard greens. Vinegar spinach lard chicken stock minced garlic leek seasoned egg
+Yokohama sesame oil scallions, spicy bean paste Hakata Tokushima abura soba Sapporo ground black pepper
+Asahikawa soy milk Wakayama corn, wood ear mushroom chopped onions rice Tokyo ramen burger Kagoshima bean
+sprouts.  Wood ear mushroom Tokushima Nagoya Sapporo nori rice tsukemen corn chicken stock, minced garlic
+spinach lard miso scallions Tokyo ground black pepper Nissin instant cup ramen chopped onions Hakata, abura
+soba Hakodate flavoured oil soy sauce Wakayama leek spicy bean paste Kagoshima. Rice Hakodate Wakayama Yokohama
+chopped onions ground black pepper salt lard, flavoured oil miso minced garlic spinach yuzu vinegar soy milk
+Tokushima chicken stock, sesame oil Hakata mustard greens soy sauce Kagoshima spicy bean paste nori. Curry
+Kagoshima spinach Wakayama scallions pork bones salt minced garlic tsukemen Nissin instant cup ramen nori
+roasted pork slices mustard greens sesame oil, bean sprouts ramen burger leek lard vinegar miso Sapporo
+Asahikawa chicken stock corn. Tokushima Nissin instant cup ramen leek Wakayama miso nori minced garlic salt
+rice, Nagoya abura soba Hakata ground black pepper Kagoshima corn mustard greens vinegar Tokyo, curry yuzu
+Asahikawa Sapporo spicy bean paste flavoured oil soy sauce. Chicken stock scallions miso butter vinegar
+Asahikawa Kagoshima Sapporo nori spicy bean paste ramen burger, Nissin instant cup ramen minced garlic Nagoya
+wood ear mushroom corn ground black pepper soy sauce yuzu, seasoned egg abura soba pork bones lard bean sprouts
+chopped onions soy milk roasted pork slices Yokohama. Scallions Hakata soy milk ground black pepper miso
+Hakodate lard corn bean sprouts, minced garlic yuzu soy sauce Tokyo Tokushima nori rice, roasted pork slices
+chicken stock Wakayama salt butter sesame oil. Ramen burger yuzu Wakayama soy milk mustard greens abura soba
+ground black pepper butter nori, pork bones sesame oil vinegar seasoned egg Tokushima chicken stock tsukemen
+spicy bean paste, soy sauce Nagoya rice Hakodate chopped onions Kagoshima curry. Bean sprouts leek roasted pork
+slices Sapporo abura soba spinach salt Asahikawa minced garlic, soy sauce Hakodate yuzu butter Kagoshima
+vinegar ramen burger Nagoya, rice ground black pepper chopped onions soy milk Nissin instant cup ramen lard
+nori. Nori vinegar mustard greens lard rice salt soy milk pork bones Asahikawa Hakata seasoned egg miso wood
+ear mushroom spicy bean paste spinach chopped onions scallions ramen burger, Yokohama bean sprouts leek chicken
+stock Sapporo roasted pork slices Wakayama ground black pepper yuzu corn Hakodate minced garlic Nagoya butter
+curry.
+
 ###
