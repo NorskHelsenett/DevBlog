@@ -11,6 +11,7 @@ builder.Services.AddScoped<ChunkConsumer>();
 builder.Services.AddHostedService<BlobMetadataConsumer>();
 builder.Services.AddSingleton<OutputStateService>();
 builder.Services.AddSingleton<UserAccessMappingStateService>();
+builder.Services.AddScoped<UserAccessMappingProducer>();
 
 HttpClient httpClient;
 if (Environment.GetEnvironmentVariable("HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES") == "false")
@@ -283,7 +284,7 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
 })
 .RequireAuthorization();
 
-app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context, UserAccessMappingStateService userAccessMappingStateService) =>
+app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context, UserAccessMappingStateService userAccessMappingStateService, UserAccessMappingProducer userAccessMappingProducer) =>
 {
     var correlationId = System.Guid.NewGuid().ToString("D");
     if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
@@ -313,7 +314,15 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
         CorrelationId = correlationId,
     };
 
+    var internalBlobId = GetBlobId(nameOfOwner: updatedUserAccessMapping.Owner, suppliedBlobName: updatedUserAccessMapping.BlobName);
     app.Logger.LogInformation($"CorrelationId {correlationId} This is the updated user access mapping object {updatedUserAccessMapping}");
+    var produceResult = await userAccessMappingProducer.ProduceUserAccessMappingAsync(updatedUserAccessMapping, internalBlobId, cancellationToken);
+    if (produceResult)
+    {
+        return Results.Ok($"Successfully updated user access mapping");
+    }
+
+    return Results.StatusCode(StatusCodes.Status500InternalServerError);
 })
 .RequireAuthorization();
 
