@@ -10,6 +10,7 @@ builder.Services.AddSingleton<ChunkingProducer>();
 builder.Services.AddScoped<ChunkConsumer>();
 builder.Services.AddHostedService<BlobMetadataConsumer>();
 builder.Services.AddSingleton<OutputStateService>();
+builder.Services.AddSingleton<UserAccessMappingStateService>();
 
 HttpClient httpClient;
 if (Environment.GetEnvironmentVariable("HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES") == "false")
@@ -282,7 +283,7 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
 })
 .RequireAuthorization();
 
-app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context) =>
+app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context, UserAccessMappingStateService userAccessMappingStateService) =>
 {
     var correlationId = System.Guid.NewGuid().ToString("D");
     if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
@@ -293,20 +294,11 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
         }
     }
 
-    // var suppliedBlobName = "";
-    // if(context.Request.Headers.TryGetValue("X-Blob-Name", out Microsoft.Extensions.Primitives.StringValues headerSuppliedBlobName))
-    // {
-    //     if(!string.IsNullOrWhiteSpace(headerSuppliedBlobName.ToString()))
-    //     {
-    //         suppliedBlobName = headerSuppliedBlobName.ToString();
-    //     }
-    // }
-
     var cancellationToken = context.Request.HttpContext.RequestAborted;
     var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
     app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
 
-    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: apiParamUserAccessMapping.BlobName);
+    var internalBlobId = GetBlobId(nameOfOwner: apiParamUserAccessMapping.Owner, suppliedBlobName: apiParamUserAccessMapping.BlobName);
 
     var todoRetrieveCollectionOfAccessRules = new List<UserAccessMapping>();
     // Check if user is in "owners" list
@@ -325,6 +317,21 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
     app.Logger.LogInformation($"CorrelationId {correlationId} This is the updated user access mapping object {updatedUserAccessMapping}");
 })
 .RequireAuthorization();
+
+app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateService userAccessMappingStateService) =>
+{
+    var correlationId = System.Guid.NewGuid().ToString("D");
+    if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
+    {
+        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
+        {
+            correlationId = headerCorrelationId.ToString();
+        }
+    }
+    app.Logger.LogInformation($"CorrelationId {correlationId} Received request to retrieve list of user access mappings");
+    var allMappings = userAccessMappingStateService.GetAllUserAccessMappings();
+    return Results.Json(allMappings);
+}).RequireAuthorization();
 
 app.MapGet("/healthz", () => Results.Ok("Started successfully"));
 app.MapGet("/healthz/live", () => Results.Ok("Alive and well"));

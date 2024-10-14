@@ -26,11 +26,19 @@ Content-Type: application/json
 
 {
     "BlobName": "sample/blob/ipsums/dino.whatevs",
+    "Owner": "demo-admin",
     "CanChangeAccess": ["demo-admin"],
     "CanRetrieve": ["admin", "demo-admin", "user"],
     "CanChange": ["admin"],
     "CanDelete": ["user"]
 }
+
+### Retrieve user access mapping
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+
+GET {{baseurl}}/userAccessMappings
+Authorization: Bearer {{authToken}}
 
 ### Poke retrieve endpoint without auth - this should fail
 
