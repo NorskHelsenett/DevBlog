@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "KafkaBlobChunking";
+
+message UserAccessMapping {
+    string ResourceId = 1;
+    repeated string OwnerId = 2;
+    repeated string CanRetrieve = 3;
+    repeated string CanChange = 4; // Should impy delete
+    repeated string CanDelete = 5; // For the cases where you want someone to be able to clean up, but not extract the content
+    google.protobuf.Timestamp UpdatedAt = 6; // For when the streams are moved to new homes with new topic timestamps
+    string UpdatedBy = 7; // Get history from previous updates if needed
+    string CorrelationId = 8;
+}
