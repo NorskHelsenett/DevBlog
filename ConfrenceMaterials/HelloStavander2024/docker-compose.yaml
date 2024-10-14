@@ -1483,14 +1483,15 @@ services:
             esac
             shift
           done
+          ehco "==> Creating demo user $${SUPPLIED_USER_NAME} in demo realm $${SUPPLIED_REALM}"
           /opt/keycloak/bin/kcadm.sh create users \
             --target-realm $$SUPPLIED_REALM \
             --set username=$$SUPPLIED_USER_NAME \
             --set enabled=true \
             --set emailVerified=true \
             --set "email=$${SUPPLIED_USER_NAME}@example.com" \
-            --set "firstName=$${SUPPLIED_USER_NAME}_FirstName" \
-            --set "lastName=$${SUPPLIED_USER_NAME}_ConfigruedLastName" \
+            --set "firstName=$${SUPPLIED_USER_NAME}_FN" \
+            --set "lastName=$${SUPPLIED_USER_NAME}_LN" \
             --output
           echo "==> Setting password for demo admin in demo realm"
           /opt/keycloak/bin/kcadm.sh set-password \
