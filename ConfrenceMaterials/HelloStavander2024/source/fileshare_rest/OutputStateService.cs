@@ -50,6 +50,13 @@ public class OutputStateService
         return false;
     }
 
+    public List<BlobChunksMetadata> ListStoredBlobs(string userId, string correlationId)
+    {
+        _logger.LogDebug($"CorrelationId \"{correlationId}\" Listing stored blobs");
+        var metadatas = _blobMetadatas.Values.ToList();
+        return metadatas;
+    }
+
     public List<TopicPartitionOffset> GetLastConsumedTopicPartitionOffsets()
     {
         return _latestConsumedMetadataTpo

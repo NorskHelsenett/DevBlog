@@ -28,4 +28,11 @@ GET {{baseurl}}/retrieve
 Authorization: Bearer {{authToken}}
 X-Blob-Name: ToDo: Example value for now
 
+### List stored files
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+
+GET {{baseurl}}/list
+Authorization: Bearer {{authToken}}
+
 ###

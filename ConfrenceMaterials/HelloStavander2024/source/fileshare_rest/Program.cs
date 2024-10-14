@@ -1,4 +1,6 @@
 global using static EnvVarNames;
+using System.Security.Claims;
+using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -232,6 +234,47 @@ app.MapPost("/remove", async (HttpContext context, ChunkingProducer chunkingProd
         return Results.Ok();
     }
     return Results.StatusCode(StatusCodes.Status500InternalServerError);
+})
+.RequireAuthorization();
+
+app.MapGet("/list", (HttpContext context, OutputStateService stateService) =>
+{
+    var correlationId = System.Guid.NewGuid().ToString("D");
+    if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
+    {
+        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
+        {
+            correlationId = headerCorrelationId.ToString();
+        }
+    }
+
+    var cancellationToken = context.Request.HttpContext.RequestAborted;
+
+    // Useful for figuring out what your code could do, but not something you should continuously log runtime
+    // var currentUserToken = context.Request.Headers.Authorization;
+    // app.Logger.LogDebug($"Current user token \"{currentUserToken}\"");
+    // foreach (var x in context.User.Claims)
+    // {
+    //     app.Logger.LogDebug($"Claim {x.Type}: {x.Value}");
+    // }
+
+    // Use user email claim, because it plays nicer when KC is used as proxy for companys auth service.
+    // Beware security tradeoff if you trust multiple external identity providers (employee has been terminated, but do they still have a private facebook/apple/google account, which they gladly say the user has logged in to with their old account registerd with the email @company.tld?)
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"Current user email: \"{userEmailClaim}\"");
+    var userIdClaim = context.User.Claims.FirstOrDefault(c => c.Type == "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier")?.Value;
+    app.Logger.LogDebug($"Current user sid: \"{userIdClaim}\"");
+
+    var listOfAllFiles = stateService.ListStoredBlobs(userEmailClaim, correlationId);
+
+    var fileNames = listOfAllFiles.Select(bm => bm.BlobName).ToList();
+    var recordSeparator = '\u001e';
+    var separatorString = $"{recordSeparator}";
+    var resultingCollection = fileNames.Aggregate(new StringBuilder(),
+            (current, next) => current.Append(current.Length == 0? "" : separatorString).Append(next))
+        .ToString();
+
+    return Results.Ok(resultingCollection);
 })
 .RequireAuthorization();
 
