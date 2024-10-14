@@ -9,6 +9,7 @@ var builder = WebApplication.CreateSlimBuilder(args);
 builder.Services.AddSingleton<ChunkingProducer>();
 builder.Services.AddScoped<ChunkConsumer>();
 builder.Services.AddHostedService<BlobMetadataConsumer>();
+builder.Services.AddHostedService<UserAccessMappingConsumer>();
 builder.Services.AddSingleton<OutputStateService>();
 builder.Services.AddSingleton<UserAccessMappingStateService>();
 builder.Services.AddScoped<UserAccessMappingProducer>();

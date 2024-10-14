@@ -14,6 +14,12 @@ public class UserAccessMappingStateService
         _userAccessMappings[blobId] = mapping;
     }
 
+    public void RemoveUserAccessMapping(string blobId)
+    {
+        if(_userAccessMappings.ContainsKey(blobId))
+            _userAccessMappings.Remove(blobId);
+    }
+
     public IEnumerable<UserAccessMapping> GetAllUserAccessMappings()
     {
         return _userAccessMappings.Values;
