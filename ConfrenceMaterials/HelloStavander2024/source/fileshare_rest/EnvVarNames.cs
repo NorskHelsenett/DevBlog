@@ -1,5 +1,6 @@
 public static class EnvVarNames
 {
+    // App specific config
     public const string BIG_PAYLOADS_CHUNKS_TOPIC = nameof(BIG_PAYLOADS_CHUNKS_TOPIC);
     public const string BIG_PAYLOADS_METADATA_TOPIC = nameof(BIG_PAYLOADS_METADATA_TOPIC);
     public const string BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES = nameof(BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES);
@@ -24,4 +25,10 @@ public static class EnvVarNames
     /// The url(s) you can reach a schema registry at. You can specify more than one schema registry url by separating them with commas.
     /// </summary>
     public const string KAFKA_SCHEMA_REGISTRY_URL = nameof(KAFKA_SCHEMA_REGISTRY_URL);
+
+    // Auth confing
+    public const string OIDC_IDP_ADDRESS_FOR_SERVER = nameof(OIDC_IDP_ADDRESS_FOR_SERVER);
+    public const string OIDC_IDP_ADDRESS_FOR_USERS = nameof(OIDC_IDP_ADDRESS_FOR_USERS);
+    public const string OIDC_REQUIRE_HTTPS_METADATA = nameof(OIDC_REQUIRE_HTTPS_METADATA);
+    public const string OIDC_AUDIENCE = nameof(OIDC_AUDIENCE);
 }

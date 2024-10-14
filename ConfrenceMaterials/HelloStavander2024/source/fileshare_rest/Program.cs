@@ -27,10 +27,10 @@ builder.Services.AddAuthentication().AddJwtBearer("OurBearerScheme", options =>
 {
      var backendIdpUrl =
          Environment.GetEnvironmentVariable(
-             "OIDC_IDP_ADDRESS_FOR_SERVER"); // "http://keycloak:8088/realms/lokalmaskin"
+             OIDC_IDP_ADDRESS_FOR_SERVER); // "http://keycloak:8088/realms/lokalmaskin"
      var clientIdpUrl =
          Environment.GetEnvironmentVariable(
-             "OIDC_IDP_ADDRESS_FOR_USERS"); // "http://localhost:8088/realms/lokalmaskin"
+             OIDC_IDP_ADDRESS_FOR_USERS); // "http://localhost:8088/realms/lokalmaskin"
      options.Configuration = new()
      {
          Issuer = backendIdpUrl,
@@ -51,9 +51,9 @@ builder.Services.AddAuthentication().AddJwtBearer("OurBearerScheme", options =>
      options.TokenValidationParameters.NameClaimType = "name"; // This is what populates @context.User.Identity?.Name
      options.TokenValidationParameters.RoleClaimType = "role";
      options.RequireHttpsMetadata =
-         Environment.GetEnvironmentVariable("OIDC_REQUIRE_HTTPS_METADATA") != "false"; // disable only in dev env
+         Environment.GetEnvironmentVariable(OIDC_REQUIRE_HTTPS_METADATA) != "false"; // disable only in dev env
      options.MapInboundClaims = true;
-     options.Audience = Environment.GetEnvironmentVariable("OIDC_AUDIENCE");
+     options.Audience = Environment.GetEnvironmentVariable(OIDC_AUDIENCE);
 });
 
 JsonWebKeySet FetchJwks(string url)

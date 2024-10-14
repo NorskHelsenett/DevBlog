@@ -1459,7 +1459,46 @@ services:
         CUSTOM_REALM_NAME=demo-realm
         CUSTOM_CLIENT_NAME=demo-client
         CUSTOM_ROLE_NAME=demo-role
-        CUSTOM_USER_NAME=demo-admin
+        DEMO_PASSWORD=password
+
+        function CreateUserInRealm {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --realm*|-r*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                SUPPLIED_REALM="$${1#*=}"
+                ;;
+              --username*|-u*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                SUPPLIED_USER_NAME="$${1#*=}"
+                ;;
+              --password*|-p*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                SUPPLIED_USER_PASSWORD="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+          /opt/keycloak/bin/kcadm.sh create users \
+            --target-realm $$SUPPLIED_REALM \
+            --set username=$$SUPPLIED_USER_NAME \
+            --set enabled=true \
+            --set emailVerified=true \
+            --set "email=$${SUPPLIED_USER_NAME}@example.com" \
+            --set "firstName=$${SUPPLIED_USER_NAME}_FirstName" \
+            --set "lastName=$${SUPPLIED_USER_NAME}_ConfigruedLastName" \
+            --output
+          echo "==> Setting password for demo admin in demo realm"
+          /opt/keycloak/bin/kcadm.sh set-password \
+            --target-realm $$SUPPLIED_REALM \
+            --username $$SUPPLIED_USER_NAME \
+            --new-password $$SUPPLIED_USER_PASSWORD
+        }
+
         while :
         do
           exec 3<>/dev/tcp/127.0.0.1/8088
@@ -1472,6 +1511,7 @@ services:
           echo "==> KC not ready, sleeping a bit and checking again"
           sleep 2
         done
+
         echo "Configuring realms and users"
         echo "==> Configuring admin connection"
         /opt/keycloak/bin/kcadm.sh config credentials \
@@ -1488,21 +1528,6 @@ services:
           --set enabled=true \
           --set sslRequired=NONE \
           --output
-        echo "==> Creating admin user for demo realm"
-        /opt/keycloak/bin/kcadm.sh create users \
-          --target-realm $$CUSTOM_REALM_NAME \
-          --set username=$$CUSTOM_USER_NAME \
-          --set enabled=true \
-          --set emailVerified=true \
-          --set email=$$CUSTOM_USER_NAME@example.com \
-          --set firstName="ConfiguredFirstName" \
-          --set lastName="ConfigruedLastName" \
-          --output
-        echo "==> Setting password for demo admin in demo realm"
-        /opt/keycloak/bin/kcadm.sh set-password \
-          --target-realm $$CUSTOM_REALM_NAME \
-          --username $$CUSTOM_USER_NAME \
-          --new-password password
         echo "==> Creating demo oauth client registration in demo realm"
         /opt/keycloak/bin/kcadm.sh create clients \
           --target-realm $$CUSTOM_REALM_NAME \
@@ -1518,11 +1543,29 @@ services:
           --target-realm $$CUSTOM_REALM_NAME \
           --set name=$$CUSTOM_ROLE_NAME \
           --output
-        echo "==> Giving demo admin in demo realm demo role in demo realm"
+
+        echo "==> Creating demo users in demo realm"
+        CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "demo-admin" --password $$DEMO_PASSWORD
+        CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "user" --password $$DEMO_PASSWORD
+        CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "admin" --password $$DEMO_PASSWORD
+
+        echo "==> Assigning roles to demo users"
+
         /opt/keycloak/bin/kcadm.sh add-roles \
           --target-realm $$CUSTOM_REALM_NAME \
-          --uusername $$CUSTOM_USER_NAME \
+          --uusername "demo-admin" \
           --rolename $$CUSTOM_ROLE_NAME
+
+        /opt/keycloak/bin/kcadm.sh add-roles \
+          --target-realm $$CUSTOM_REALM_NAME \
+          --uusername "user" \
+          --rolename $$CUSTOM_ROLE_NAME
+
+        /opt/keycloak/bin/kcadm.sh add-roles \
+          --target-realm $$CUSTOM_REALM_NAME \
+          --uusername "admin" \
+          --rolename $$CUSTOM_ROLE_NAME
+
         echo "Demo setup done"
         echo "Keeping container alive indefinitely untill it's shut down from the outside"
         echo "To get user access token run curl --request POST --url http://localhost:8088/realms/demo-realm/protocol/openid-connect/token --header 'Content-Type: application/x-www-form-urlencoded' --data client_id=demo-client --data username=demo-admin --data password=password --data realm=demo-realm --data grant_type=password"
