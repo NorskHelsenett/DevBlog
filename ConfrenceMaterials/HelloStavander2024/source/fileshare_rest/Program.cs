@@ -298,13 +298,12 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
     var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
     app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
 
-    var internalBlobId = GetBlobId(nameOfOwner: apiParamUserAccessMapping.Owner, suppliedBlobName: apiParamUserAccessMapping.BlobName);
-
     var todoRetrieveCollectionOfAccessRules = new List<UserAccessMapping>();
     // Check if user is in "owners" list
     var updatedUserAccessMapping = new UserAccessMapping
     {
-        ResourceId = internalBlobId,
+        BlobName = apiParamUserAccessMapping.BlobName,
+        Owner = apiParamUserAccessMapping.Owner,
         CanChangeAccess = { apiParamUserAccessMapping.CanChangeAccess },
         CanRetrieve = { apiParamUserAccessMapping.CanRetrieve },
         CanChange = { apiParamUserAccessMapping.CanChange },

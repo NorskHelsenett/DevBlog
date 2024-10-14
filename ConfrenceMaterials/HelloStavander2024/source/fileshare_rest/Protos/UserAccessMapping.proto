@@ -5,12 +5,13 @@ import "google/protobuf/timestamp.proto";
 option csharp_namespace = "KafkaBlobChunking";
 
 message UserAccessMapping {
-    string ResourceId = 1;
-    repeated string CanChangeAccess = 2;
-    repeated string CanRetrieve = 3;
-    repeated string CanChange = 4; // Should impy delete
-    repeated string CanDelete = 5; // For the cases where you want someone to be able to clean up, but not extract the content
-    google.protobuf.Timestamp UpdatedAt = 6; // For when the streams are moved to new homes with new topic timestamps
-    string UpdatedBy = 7; // Get history from previous updates if needed
-    string CorrelationId = 8;
+    string BlobName = 1;
+    string Owner = 2;
+    repeated string CanChangeAccess = 3;
+    repeated string CanRetrieve = 4;
+    repeated string CanChange = 5; // Should impy delete
+    repeated string CanDelete = 6; // For the cases where you want someone to be able to clean up, but not extract the content
+    google.protobuf.Timestamp UpdatedAt = 7; // For when the streams are moved to new homes with new topic timestamps
+    string UpdatedBy = 8; // Get history from previous updates if needed
+    string CorrelationId = 9;
 }

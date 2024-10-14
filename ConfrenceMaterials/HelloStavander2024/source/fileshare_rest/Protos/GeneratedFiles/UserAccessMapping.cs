@@ -25,16 +25,17 @@ namespace KafkaBlobChunking {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "ChdVc2VyQWNjZXNzTWFwcGluZy5wcm90bxofZ29vZ2xlL3Byb3RvYnVmL3Rp",
-            "bWVzdGFtcC5wcm90byLUAQoRVXNlckFjY2Vzc01hcHBpbmcSEgoKUmVzb3Vy",
-            "Y2VJZBgBIAEoCRIXCg9DYW5DaGFuZ2VBY2Nlc3MYAiADKAkSEwoLQ2FuUmV0",
-            "cmlldmUYAyADKAkSEQoJQ2FuQ2hhbmdlGAQgAygJEhEKCUNhbkRlbGV0ZRgF",
-            "IAMoCRItCglVcGRhdGVkQXQYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGlt",
-            "ZXN0YW1wEhEKCVVwZGF0ZWRCeRgHIAEoCRIVCg1Db3JyZWxhdGlvbklkGAgg",
-            "ASgJQhSqAhFLYWZrYUJsb2JDaHVua2luZ2IGcHJvdG8z"));
+            "bWVzdGFtcC5wcm90byLhAQoRVXNlckFjY2Vzc01hcHBpbmcSEAoIQmxvYk5h",
+            "bWUYASABKAkSDQoFT3duZXIYAiABKAkSFwoPQ2FuQ2hhbmdlQWNjZXNzGAMg",
+            "AygJEhMKC0NhblJldHJpZXZlGAQgAygJEhEKCUNhbkNoYW5nZRgFIAMoCRIR",
+            "CglDYW5EZWxldGUYBiADKAkSLQoJVXBkYXRlZEF0GAcgASgLMhouZ29vZ2xl",
+            "LnByb3RvYnVmLlRpbWVzdGFtcBIRCglVcGRhdGVkQnkYCCABKAkSFQoNQ29y",
+            "cmVsYXRpb25JZBgJIAEoCUIUqgIRS2Fma2FCbG9iQ2h1bmtpbmdiBnByb3Rv",
+            "Mw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Google.Protobuf.WellKnownTypes.TimestampReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::KafkaBlobChunking.UserAccessMapping), global::KafkaBlobChunking.UserAccessMapping.Parser, new[]{ "ResourceId", "CanChangeAccess", "CanRetrieve", "CanChange", "CanDelete", "UpdatedAt", "UpdatedBy", "CorrelationId" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::KafkaBlobChunking.UserAccessMapping), global::KafkaBlobChunking.UserAccessMapping.Parser, new[]{ "BlobName", "Owner", "CanChangeAccess", "CanRetrieve", "CanChange", "CanDelete", "UpdatedAt", "UpdatedBy", "CorrelationId" }, null, null, null, null)
           }));
     }
     #endregion
@@ -76,7 +77,8 @@ namespace KafkaBlobChunking {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public UserAccessMapping(UserAccessMapping other) : this() {
-      resourceId_ = other.resourceId_;
+      blobName_ = other.blobName_;
+      owner_ = other.owner_;
       canChangeAccess_ = other.canChangeAccess_.Clone();
       canRetrieve_ = other.canRetrieve_.Clone();
       canChange_ = other.canChange_.Clone();
@@ -93,22 +95,34 @@ namespace KafkaBlobChunking {
       return new UserAccessMapping(this);
     }
 
-    /// <summary>Field number for the "ResourceId" field.</summary>
-    public const int ResourceIdFieldNumber = 1;
-    private string resourceId_ = "";
+    /// <summary>Field number for the "BlobName" field.</summary>
+    public const int BlobNameFieldNumber = 1;
+    private string blobName_ = "";
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
-    public string ResourceId {
-      get { return resourceId_; }
+    public string BlobName {
+      get { return blobName_; }
       set {
-        resourceId_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+        blobName_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "Owner" field.</summary>
+    public const int OwnerFieldNumber = 2;
+    private string owner_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Owner {
+      get { return owner_; }
+      set {
+        owner_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
       }
     }
 
     /// <summary>Field number for the "CanChangeAccess" field.</summary>
-    public const int CanChangeAccessFieldNumber = 2;
+    public const int CanChangeAccessFieldNumber = 3;
     private static readonly pb::FieldCodec<string> _repeated_canChangeAccess_codec
-        = pb::FieldCodec.ForString(18);
+        = pb::FieldCodec.ForString(26);
     private readonly pbc::RepeatedField<string> canChangeAccess_ = new pbc::RepeatedField<string>();
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -117,9 +131,9 @@ namespace KafkaBlobChunking {
     }
 
     /// <summary>Field number for the "CanRetrieve" field.</summary>
-    public const int CanRetrieveFieldNumber = 3;
+    public const int CanRetrieveFieldNumber = 4;
     private static readonly pb::FieldCodec<string> _repeated_canRetrieve_codec
-        = pb::FieldCodec.ForString(26);
+        = pb::FieldCodec.ForString(34);
     private readonly pbc::RepeatedField<string> canRetrieve_ = new pbc::RepeatedField<string>();
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -128,9 +142,9 @@ namespace KafkaBlobChunking {
     }
 
     /// <summary>Field number for the "CanChange" field.</summary>
-    public const int CanChangeFieldNumber = 4;
+    public const int CanChangeFieldNumber = 5;
     private static readonly pb::FieldCodec<string> _repeated_canChange_codec
-        = pb::FieldCodec.ForString(34);
+        = pb::FieldCodec.ForString(42);
     private readonly pbc::RepeatedField<string> canChange_ = new pbc::RepeatedField<string>();
     /// <summary>
     /// Should impy delete
@@ -142,9 +156,9 @@ namespace KafkaBlobChunking {
     }
 
     /// <summary>Field number for the "CanDelete" field.</summary>
-    public const int CanDeleteFieldNumber = 5;
+    public const int CanDeleteFieldNumber = 6;
     private static readonly pb::FieldCodec<string> _repeated_canDelete_codec
-        = pb::FieldCodec.ForString(42);
+        = pb::FieldCodec.ForString(50);
     private readonly pbc::RepeatedField<string> canDelete_ = new pbc::RepeatedField<string>();
     /// <summary>
     /// For the cases where you want someone to be able to clean up, but not extract the content
@@ -156,7 +170,7 @@ namespace KafkaBlobChunking {
     }
 
     /// <summary>Field number for the "UpdatedAt" field.</summary>
-    public const int UpdatedAtFieldNumber = 6;
+    public const int UpdatedAtFieldNumber = 7;
     private global::Google.Protobuf.WellKnownTypes.Timestamp updatedAt_;
     /// <summary>
     /// For when the streams are moved to new homes with new topic timestamps
@@ -171,7 +185,7 @@ namespace KafkaBlobChunking {
     }
 
     /// <summary>Field number for the "UpdatedBy" field.</summary>
-    public const int UpdatedByFieldNumber = 7;
+    public const int UpdatedByFieldNumber = 8;
     private string updatedBy_ = "";
     /// <summary>
     /// Get history from previous updates if needed
@@ -186,7 +200,7 @@ namespace KafkaBlobChunking {
     }
 
     /// <summary>Field number for the "CorrelationId" field.</summary>
-    public const int CorrelationIdFieldNumber = 8;
+    public const int CorrelationIdFieldNumber = 9;
     private string correlationId_ = "";
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -212,7 +226,8 @@ namespace KafkaBlobChunking {
       if (ReferenceEquals(other, this)) {
         return true;
       }
-      if (ResourceId != other.ResourceId) return false;
+      if (BlobName != other.BlobName) return false;
+      if (Owner != other.Owner) return false;
       if(!canChangeAccess_.Equals(other.canChangeAccess_)) return false;
       if(!canRetrieve_.Equals(other.canRetrieve_)) return false;
       if(!canChange_.Equals(other.canChange_)) return false;
@@ -227,7 +242,8 @@ namespace KafkaBlobChunking {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override int GetHashCode() {
       int hash = 1;
-      if (ResourceId.Length != 0) hash ^= ResourceId.GetHashCode();
+      if (BlobName.Length != 0) hash ^= BlobName.GetHashCode();
+      if (Owner.Length != 0) hash ^= Owner.GetHashCode();
       hash ^= canChangeAccess_.GetHashCode();
       hash ^= canRetrieve_.GetHashCode();
       hash ^= canChange_.GetHashCode();
@@ -253,24 +269,28 @@ namespace KafkaBlobChunking {
     #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
       output.WriteRawMessage(this);
     #else
-      if (ResourceId.Length != 0) {
+      if (BlobName.Length != 0) {
         output.WriteRawTag(10);
-        output.WriteString(ResourceId);
+        output.WriteString(BlobName);
+      }
+      if (Owner.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Owner);
       }
       canChangeAccess_.WriteTo(output, _repeated_canChangeAccess_codec);
       canRetrieve_.WriteTo(output, _repeated_canRetrieve_codec);
       canChange_.WriteTo(output, _repeated_canChange_codec);
       canDelete_.WriteTo(output, _repeated_canDelete_codec);
       if (updatedAt_ != null) {
-        output.WriteRawTag(50);
+        output.WriteRawTag(58);
         output.WriteMessage(UpdatedAt);
       }
       if (UpdatedBy.Length != 0) {
-        output.WriteRawTag(58);
+        output.WriteRawTag(66);
         output.WriteString(UpdatedBy);
       }
       if (CorrelationId.Length != 0) {
-        output.WriteRawTag(66);
+        output.WriteRawTag(74);
         output.WriteString(CorrelationId);
       }
       if (_unknownFields != null) {
@@ -283,24 +303,28 @@ namespace KafkaBlobChunking {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
-      if (ResourceId.Length != 0) {
+      if (BlobName.Length != 0) {
         output.WriteRawTag(10);
-        output.WriteString(ResourceId);
+        output.WriteString(BlobName);
+      }
+      if (Owner.Length != 0) {
+        output.WriteRawTag(18);
+        output.WriteString(Owner);
       }
       canChangeAccess_.WriteTo(ref output, _repeated_canChangeAccess_codec);
       canRetrieve_.WriteTo(ref output, _repeated_canRetrieve_codec);
       canChange_.WriteTo(ref output, _repeated_canChange_codec);
       canDelete_.WriteTo(ref output, _repeated_canDelete_codec);
       if (updatedAt_ != null) {
-        output.WriteRawTag(50);
+        output.WriteRawTag(58);
         output.WriteMessage(UpdatedAt);
       }
       if (UpdatedBy.Length != 0) {
-        output.WriteRawTag(58);
+        output.WriteRawTag(66);
         output.WriteString(UpdatedBy);
       }
       if (CorrelationId.Length != 0) {
-        output.WriteRawTag(66);
+        output.WriteRawTag(74);
         output.WriteString(CorrelationId);
       }
       if (_unknownFields != null) {
@@ -313,8 +337,11 @@ namespace KafkaBlobChunking {
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public int CalculateSize() {
       int size = 0;
-      if (ResourceId.Length != 0) {
-        size += 1 + pb::CodedOutputStream.ComputeStringSize(ResourceId);
+      if (BlobName.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(BlobName);
+      }
+      if (Owner.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Owner);
       }
       size += canChangeAccess_.CalculateSize(_repeated_canChangeAccess_codec);
       size += canRetrieve_.CalculateSize(_repeated_canRetrieve_codec);
@@ -341,8 +368,11 @@ namespace KafkaBlobChunking {
       if (other == null) {
         return;
       }
-      if (other.ResourceId.Length != 0) {
-        ResourceId = other.ResourceId;
+      if (other.BlobName.Length != 0) {
+        BlobName = other.BlobName;
+      }
+      if (other.Owner.Length != 0) {
+        Owner = other.Owner;
       }
       canChangeAccess_.Add(other.canChangeAccess_);
       canRetrieve_.Add(other.canRetrieve_);
@@ -380,37 +410,41 @@ namespace KafkaBlobChunking {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
             break;
           case 10: {
-            ResourceId = input.ReadString();
+            BlobName = input.ReadString();
             break;
           }
           case 18: {
-            canChangeAccess_.AddEntriesFrom(input, _repeated_canChangeAccess_codec);
+            Owner = input.ReadString();
             break;
           }
           case 26: {
-            canRetrieve_.AddEntriesFrom(input, _repeated_canRetrieve_codec);
+            canChangeAccess_.AddEntriesFrom(input, _repeated_canChangeAccess_codec);
             break;
           }
           case 34: {
-            canChange_.AddEntriesFrom(input, _repeated_canChange_codec);
+            canRetrieve_.AddEntriesFrom(input, _repeated_canRetrieve_codec);
             break;
           }
           case 42: {
-            canDelete_.AddEntriesFrom(input, _repeated_canDelete_codec);
+            canChange_.AddEntriesFrom(input, _repeated_canChange_codec);
             break;
           }
           case 50: {
+            canDelete_.AddEntriesFrom(input, _repeated_canDelete_codec);
+            break;
+          }
+          case 58: {
             if (updatedAt_ == null) {
               UpdatedAt = new global::Google.Protobuf.WellKnownTypes.Timestamp();
             }
             input.ReadMessage(UpdatedAt);
             break;
           }
-          case 58: {
+          case 66: {
             UpdatedBy = input.ReadString();
             break;
           }
-          case 66: {
+          case 74: {
             CorrelationId = input.ReadString();
             break;
           }
@@ -434,37 +468,41 @@ namespace KafkaBlobChunking {
             _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
             break;
           case 10: {
-            ResourceId = input.ReadString();
+            BlobName = input.ReadString();
             break;
           }
           case 18: {
-            canChangeAccess_.AddEntriesFrom(ref input, _repeated_canChangeAccess_codec);
+            Owner = input.ReadString();
             break;
           }
           case 26: {
-            canRetrieve_.AddEntriesFrom(ref input, _repeated_canRetrieve_codec);
+            canChangeAccess_.AddEntriesFrom(ref input, _repeated_canChangeAccess_codec);
             break;
           }
           case 34: {
-            canChange_.AddEntriesFrom(ref input, _repeated_canChange_codec);
+            canRetrieve_.AddEntriesFrom(ref input, _repeated_canRetrieve_codec);
             break;
           }
           case 42: {
-            canDelete_.AddEntriesFrom(ref input, _repeated_canDelete_codec);
+            canChange_.AddEntriesFrom(ref input, _repeated_canChange_codec);
             break;
           }
           case 50: {
+            canDelete_.AddEntriesFrom(ref input, _repeated_canDelete_codec);
+            break;
+          }
+          case 58: {
             if (updatedAt_ == null) {
               UpdatedAt = new global::Google.Protobuf.WellKnownTypes.Timestamp();
             }
             input.ReadMessage(UpdatedAt);
             break;
           }
-          case 58: {
+          case 66: {
             UpdatedBy = input.ReadString();
             break;
           }
-          case 66: {
+          case 74: {
             CorrelationId = input.ReadString();
             break;
           }
