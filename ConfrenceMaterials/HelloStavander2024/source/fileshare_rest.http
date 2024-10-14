@@ -1,7 +1,12 @@
 @baseurl=http://localhost:8080
 
+### Poke Health check endpoint (this should always work)
+
+GET {{baseurl}}/healthz
+
 ### Retrieve user access token of type bearer from keycloak
 
+# @name userTokenRequest
 curl --request POST \
  --url http://localhost:8088/realms/demo-realm/protocol/openid-connect/token \
  --header 'Content-Type: application/x-www-form-urlencoded' \
@@ -10,5 +15,17 @@ curl --request POST \
  --data password=password \
  --data realm=demo-realm \
  --data grant_type=password
+
+### Poke retrieve endpoint without auth - this should fail
+
+GET {{baseurl}}/retrieve
+X-Blob-Name: ToDo: Example value for now
+
+### Poke retrieve endpoint having auth - this should work
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+GET {{baseurl}}/retrieve
+Authorization: Bearer {{authToken}}
+X-Blob-Name: ToDo: Example value for now
 
 ###
