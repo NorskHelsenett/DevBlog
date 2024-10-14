@@ -60,6 +60,7 @@ services:
       OIDC_IDP_ADDRESS_FOR_USERS: "http://localhost:8088/realms/demo-realm"
       OIDC_CLIENT_ID: "demo-client"
       OIDC_REQUIRE_HTTPS_METADATA: "false"
+      OIDC_AUDIENCE: "account"
 
       # kafkal config
       KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
