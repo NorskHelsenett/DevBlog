@@ -28,6 +28,7 @@ public static class EnvVarNames
     public const string KAFKA_SCHEMA_REGISTRY_URL = nameof(KAFKA_SCHEMA_REGISTRY_URL);
 
     // Auth confing
+    public const string HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES = nameof(HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES);
     public const string OIDC_IDP_ADDRESS_FOR_SERVER = nameof(OIDC_IDP_ADDRESS_FOR_SERVER);
     public const string OIDC_IDP_ADDRESS_FOR_USERS = nameof(OIDC_IDP_ADDRESS_FOR_USERS);
     public const string OIDC_REQUIRE_HTTPS_METADATA = nameof(OIDC_REQUIRE_HTTPS_METADATA);

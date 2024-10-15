@@ -3,7 +3,6 @@ using System.Collections.Immutable;
 using System.Security.Claims;
 using System.Text;
 using KafkaBlobChunking;
-using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateSlimBuilder(args);
@@ -17,7 +16,7 @@ builder.Services.AddSingleton<UserAccessMappingStateService>();
 builder.Services.AddScoped<UserAccessMappingProducer>();
 
 HttpClient httpClient;
-if (Environment.GetEnvironmentVariable("HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES") == "false")
+if (Environment.GetEnvironmentVariable(HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES) == "false")
 {
     var handler = new HttpClientHandler
     {
@@ -100,44 +99,6 @@ string GetBlobId(string nameOfOwner, string suppliedBlobName)
     var suppliedBlobNameSecondChecksum = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(blobNameBytes)).ToLowerInvariant();
     return $"{ownerNameChecksum}.{suppliedBlobNameFirstChecksum}.{suppliedBlobNameSecondChecksum}";
 }
-
-app.MapPost("/storefile", async (HttpRequest req, ChunkingProducer chunkingProducer) =>
-{
-    var file = req.Form.Files.First();
-    app.Logger.LogDebug($"storefile {file}");
-    var correlationId = System.Guid.NewGuid().ToString("D");
-    if(req.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
-    {
-        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
-        {
-            correlationId = headerCorrelationId.ToString();
-        }
-    }
-
-    var userEmailClaim = req.HttpContext.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
-    if (string.IsNullOrEmpty(userEmailClaim))
-    {
-        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
-        return Results.StatusCode(StatusCodes.Status401Unauthorized);
-    }
-
-    var suppliedBlobName = file.Name;
-
-    var cancellationToken = req.HttpContext.RequestAborted;
-
-    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
-
-    app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" to store blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
-
-    var produceSuccessful = await chunkingProducer.ProduceAsync(file.OpenReadStream(), blobId: internalBlobId, ownerId: userEmailClaim, callersBlobName: suppliedBlobName, correlationId: correlationId, cancellationToken);
-    if (produceSuccessful)
-    {
-        return Results.Ok();
-    }
-    return Results.StatusCode(StatusCodes.Status500InternalServerError);
-});
-// .RequireAuthorization();
 
 app.MapPost("/store", async (HttpRequest req, Stream body, ChunkingProducer chunkingProducer) =>
 {

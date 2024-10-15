@@ -13,12 +13,15 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
         request.Headers.Add("Authorization", $"Bearer {accessToken}");
         try
         {
+            logger.LogDebug($"Sending request to Kafka API to store file with name {fileName}");
             var response = await httpClient.SendAsync(request);
+            logger.LogDebug($"Received response from Kafka API to store file with name {fileName}");
+            logger.LogTrace($"Response was {response}");
             return response.StatusCode == System.Net.HttpStatusCode.OK;
         }
         catch (Exception e) {
             logger.LogError(e,"\n\nRequest to external service failed");
-            
+
         }
 
         return false;
@@ -34,13 +37,13 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
             var responseString = response.Content.ReadAsStringAsync().Result;
             logger.LogDebug(responseString);
             var responseItems = responseString.Split("\\n");
-            
+
             return responseItems.Select(MappToSecretFile).ToList();
         }
         catch (Exception e) {
-            
+
             logger.LogError(e,"\n\nRequest to external service failed");
-            
+
         }
 
         return [];
@@ -57,7 +60,7 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
 
     private FileRights GetRights(string fileOwnerName)
     {
-        
+
         var userId = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
         FileRights rights = 0;
         logger.LogDebug($"what are we comparing; {fileOwnerName} and {userId}");

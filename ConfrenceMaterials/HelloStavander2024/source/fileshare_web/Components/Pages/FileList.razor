@@ -49,7 +49,9 @@
         Logger.LogDebug($"Trying to do some stuff on client side: {e.FileCount}, filename: {e.File.Name} size {e.File.Size}");
 
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
-        var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, e.File.OpenReadStream(), e.File.Name);
+        var stream = e.File.OpenReadStream(maxAllowedSize: long.MaxValue);
+        Logger.LogDebug("Stream opened, calling further down the chain");
+        var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, stream, e.File.Name);
 
         if (filesaveResponse)
         {
