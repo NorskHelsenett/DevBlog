@@ -2,8 +2,7 @@ using System.Text.Json;
 
 public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<KafkaUserAccessManagementApiService> logger)
 {
-
-    JsonSerializerOptions serializeOptions = new()
+    readonly JsonSerializerOptions _serializeOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         WriteIndented = true
@@ -17,8 +16,8 @@ public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<
         {
             var response = await httpClient.SendAsync(request);
             var responseString = await response.Content.ReadAsStringAsync();
-            logger.LogDebug($"Response when requesting user access mappings\n{responseString}");
-            var responseParsed = System.Text.Json.JsonSerializer.Deserialize<List<ApiParamUserAccessMapping>>(responseString, serializeOptions);
+            // logger.LogDebug($"Response when requesting user access mappings\n{responseString}");
+            var responseParsed = JsonSerializer.Deserialize<List<ApiParamUserAccessMapping>>(responseString, _serializeOptions);
             return responseParsed ?? [];
         }
         catch (Exception e) {
@@ -29,7 +28,7 @@ public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<
         return [];
     }
 
-    public async Task RegisterUserAccessMappings(string accessToken, ApiParamUserAccessMapping userAccessMapping)
+    public async Task<bool> RegisterUserAccessMappings(string accessToken, ApiParamUserAccessMapping userAccessMapping)
     {
         var address = $"{Environment.GetEnvironmentVariable("FILESHARE_WEB_REMOTE_FILE_API_ADDRESS")}/updateUserAccessMapping";
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(address));
@@ -40,10 +39,12 @@ public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<
             var response = await httpClient.SendAsync(request);
             var responseString = await response.Content.ReadAsStringAsync();
             logger.LogDebug(responseString);
+            return true;
         }
         catch (Exception e) {
             Console.WriteLine("\n\nRequest to external service failed");
             Console.WriteLine(e);
         }
+        return false;
     }
 }

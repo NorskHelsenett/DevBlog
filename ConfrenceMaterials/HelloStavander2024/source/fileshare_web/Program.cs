@@ -11,6 +11,7 @@ builder.Services.AddScoped<IChungingProducer, MockProducer>();
 builder.Services.AddScoped<FileController>();
 builder.Services.AddScoped<KafkaFileApiService>();
 builder.Services.AddScoped<KafkaUserAccessManagementApiService>();
+builder.Services.AddScoped<ToastService>();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
