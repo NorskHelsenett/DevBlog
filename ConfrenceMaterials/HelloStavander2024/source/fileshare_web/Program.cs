@@ -8,7 +8,6 @@ using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<IChungingProducer, MockProducer>();
-builder.Services.AddScoped<FileController>();
 builder.Services.AddScoped<KafkaFileApiService>();
 builder.Services.AddScoped<KafkaUserAccessManagementApiService>();
 builder.Services.AddScoped<ToastService>();

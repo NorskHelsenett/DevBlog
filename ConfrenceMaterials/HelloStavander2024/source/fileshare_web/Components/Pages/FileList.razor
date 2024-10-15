@@ -1,6 +1,5 @@
 @page "/filelist"
 @using Microsoft.AspNetCore.Authentication
-@inject FileController FileController;
 @inject IJSRuntime Js;
 @inject ILogger<FileList> Logger;
 @inject IHttpContextAccessor HttpContextAccessor;
@@ -19,11 +18,9 @@
         <thead>
         <tr>
             <th>Name</th>
-            <th>Size</th>
             <th>Rights</th>
             <th>Delete</th>
             <th>Download</th>
-            <th>Share</th>
         </tr>
         </thead>
         <tbody>
@@ -31,71 +28,42 @@
         {
             <tr>
                 <td>@file.Name</td>
-                <td>@file.Size</td>
                 <td>@file.Rights</td>
                 <td><button class="btn btn-primary" hidden="@file.Delete">Delete</button></td>
                 <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
-                <td><button class="btn btn-primary" hidden="@file.Share">Share</button></td>
             </tr>
         }
         </tbody>
     </table>
 </div>
-    <div>
-        <h3>List retrieved from API</h3>
-        <div>
-            <button class="btn btn-outline-primary" @onclick="FetchFilesFromApi">Refresh file list from API</button>
-        </div>
-@if (_fileNamesFromApi.Any())
-{
-        <ul>
-            @foreach (var fileName in _fileNamesFromApi)
-            {
-                <li>@fileName</li>
-            }
-        </ul>
-}
-    </div>
-<script>
-    async function uploadFile(filename) {
-        let raw_response = await fetch("http://localhost:8080/store", {
-            method: "POST",
-            mode: "no-cors",
-    @* headers: form_headers, *@
-            body: filename,
-  });
-    return raw_response;
-    }
-</script>
+
 @code {
     private List<SecretFile> _files = new();
-    private List<string> _fileNamesFromApi = new();
-    protected override async void OnInitialized()
+    
+    protected override async Task OnInitializedAsync()
     {
-        _files = FileController.GetFiles();
         await FetchFilesFromApi();
     }
     private async Task AddFile(InputFileChangeEventArgs e)
     {
         Logger.LogDebug($"Trying to do some stuff on client side: {e.FileCount}, filename: {e.File.Name} size {e.File.Size}");
-        @* if(e.File.Size < 250000)
-        {
-            var didItWork = await FileController.SaveFile(e.File.OpenReadStream());
-            if(didItWork){
-                _logger.LogDebug("Upload Serverside worked");
+        
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, e.File.OpenReadStream());
+
+            if(filesaveResponse){
+                Logger.LogDebug("Upload Serverside worked");
                 return;
             }
-            _logger.LogWarning("upload had some trouble");
-        } *@
+            Logger.LogWarning("upload had some trouble");
         Logger.LogDebug("Doing clientside upload, it is probably a laarge file");
-        var result = await Js.InvokeAsync<string>("uploadFile", e.File.Name);
-        Logger.LogDebug($"result: {result}");
     }
 
     private async Task FetchFilesFromApi()
     {
+
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
         var fileListFromApi = await KafkaFileApiService.GetListOfFiles(accessToken);
-        _fileNamesFromApi = fileListFromApi;
+        _files = fileListFromApi;
     }
 }
