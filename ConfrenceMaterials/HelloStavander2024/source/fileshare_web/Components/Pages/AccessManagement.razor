@@ -20,7 +20,7 @@
             <tbody>
             @foreach (var uam in _userAccessMappings)
             {
-                <tr>
+                <tr @onclick="() => _chosenUserAccessMapping = uam">
                     <td>@uam.Owner</td>
                     <td>@uam.BlobName</td>
                 </tr>
@@ -51,23 +51,48 @@
             </select>
         </div>
         <div id="uamUpdateAccessPaneDetails">
+            @if (_chosenUserAccessMapping != default)
+            {
             <table>
                 <thead>
                 <tr>
                     <td>Change Access</td>
-                    <td>Read</td>
+                    <td>Retrieve</td>
+                    <td>Edit</td>
+                    <td>Delete</td>
                 </tr>
                 </thead>
                 <tbody>
-                @foreach (var uam in _userAccessMappings)
+                @if (UserCanEditAccessMapping(_chosenUserAccessMapping))
                 {
-                <tr>
-                    <td>@uam.Owner</td>
-                    <td>@uam.BlobName</td>
-                </tr>
+                    <tr>
+                        <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com"><button>Add</button></td>
+                    </tr>
+                    <tr>
+                        <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com"><button>Add</button></td>
+                    </tr>
+                    <tr>
+                        <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com"><button>Add</button></td>
+                    </tr>
+                    <tr>
+                        <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com"><button>Add</button></td>
+                    </tr>
+                }
+                @for(var i = 0; i < _chosenUserAccessMapping.CanChangeAccess.Length
+                                || i < _chosenUserAccessMapping.CanRetrieve.Length
+                                || i < _chosenUserAccessMapping.CanChange.Length
+                                || i < _chosenUserAccessMapping.CanDelete.Length; i++)
+                {
+                    <tr>
+                        <td>@if (i < _chosenUserAccessMapping.CanChangeAccess.Length){@_chosenUserAccessMapping.CanChangeAccess[i] if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}}</td>
+                        <td>@if (i < _chosenUserAccessMapping.CanRetrieve.Length){@_chosenUserAccessMapping.CanRetrieve[i] if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}}</td>
+                        <td>@if (i < _chosenUserAccessMapping.CanChange.Length){@_chosenUserAccessMapping.CanChange[i] if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}}</td>
+                        <td>@if (i < _chosenUserAccessMapping.CanDelete.Length){@_chosenUserAccessMapping.CanDelete[i] if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}}</td>
+                    </tr>
                 }
                 </tbody>
             </table>
+            }
         </div>
     </div>
 </div>
@@ -135,6 +160,7 @@
 @code
 {
     private List<ApiParamUserAccessMapping> _userAccessMappings = [];
+    private ApiParamUserAccessMapping? _chosenUserAccessMapping = default;
     private string ChosenOwnerId = "";
     private string ChosenResourceId = "";
     protected override Task OnInitializedAsync()

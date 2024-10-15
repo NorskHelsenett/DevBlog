@@ -14,7 +14,7 @@ services:
     networks:
       - apps_network
     ports:
-      - "8090:8080"
+      - "8080:8080"
     volumes:
       - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
       - ../ContainerData:/ContainerData
@@ -47,7 +47,7 @@ services:
     networks:
       - apps_network
     ports:
-      - "8080:8080"
+      - "8079:8080"
     volumes:
       - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
       - ../ContainerData:/ContainerData

@@ -1,4 +1,4 @@
-@baseurl=http://localhost:8080
+@baseurl=http://localhost:8079
 
 ### Poke Health check endpoint (this should always work)
 
@@ -48,6 +48,7 @@ X-Blob-Name: ToDo: Example value for now
 ### Poke retrieve endpoint having auth - this should work
 
 @authToken = {{userTokenRequest.response.body.access_token}}
+
 GET {{baseurl}}/retrieve
 Authorization: Bearer {{authToken}}
 X-Blob-Name: ToDo: Example value for now
