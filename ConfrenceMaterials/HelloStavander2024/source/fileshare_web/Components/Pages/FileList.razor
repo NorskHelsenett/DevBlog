@@ -57,6 +57,7 @@
             return;
         }
         Logger.LogWarning("upload had some trouble");
+        await FetchFilesFromApi();
     }
 
     private async Task FetchFilesFromApi()

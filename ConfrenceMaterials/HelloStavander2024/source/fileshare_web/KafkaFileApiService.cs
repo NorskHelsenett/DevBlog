@@ -17,8 +17,8 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
             return response.StatusCode == System.Net.HttpStatusCode.OK;
         }
         catch (Exception e) {
-            Console.WriteLine("\n\nRequest to external service failed");
-            Console.WriteLine(e);
+            logger.LogError(e,"\n\nRequest to external service failed");
+            
         }
 
         return false;
@@ -33,13 +33,14 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
             var response = httpClient.SendAsync(request).Result;
             var responseString = response.Content.ReadAsStringAsync().Result;
             logger.LogDebug(responseString);
-            var responseItems = responseString.Split("\n");
+            var responseItems = responseString.Split("\\n");
             
             return responseItems.Select(MappToSecretFile).ToList();
         }
         catch (Exception e) {
-            Console.WriteLine("\n\nRequest to external service failed");
-            Console.WriteLine(e);
+            
+            logger.LogError(e,"\n\nRequest to external service failed");
+            
         }
 
         return [];
@@ -47,10 +48,10 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
 
     private SecretFile MappToSecretFile(string item)
     {
-        var itemParts = item.Split("\t");
+        var itemParts = item.Split("\\t");
         return new SecretFile{
-            Name = itemParts[0],
-            Rights = GetRights(itemParts[1])
+            Name = itemParts[1],
+            Rights = GetRights(itemParts[0])
         };
     }
 
@@ -59,6 +60,7 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
         
         var userId = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
         FileRights rights = 0;
+        logger.LogDebug($"what are we comparing; {fileOwnerName} and {userId}");
         if(string.Equals(fileOwnerName,userId)) rights = FileRights.Owner | rights;
 
         return rights;
