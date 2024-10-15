@@ -49,19 +49,19 @@
                         <tr>
                             <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanChangeAccess"></td>
                             <td><button class="btn btn-outline-primary" @onclick="() => {
-                                                                            if(_enteredNewUserForCanChangeAccess?.Length > 2){ _chosenUserAccessMapping.CanChangeAccess.Add(_enteredNewUserForCanChangeAccess); _enteredNewUserForCanChangeAccess = default;} }">Add</button></td>
+                                if(_enteredNewUserForCanChangeAccess?.Length > 2){ _chosenUserAccessMapping.CanChangeAccess.Add(_enteredNewUserForCanChangeAccess); _enteredNewUserForCanChangeAccess = default;} }">Add</button></td>
 
                             <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanRetrieve"></td>
                             <td><button class="btn btn-outline-primary" @onclick="() => {
-                                                                            if(_enteredNewUserForCanRetrieve?.Length > 2){ _chosenUserAccessMapping.CanRetrieve.Add(_enteredNewUserForCanRetrieve); _enteredNewUserForCanRetrieve = default;} }">Add</button></td>
+                                if(_enteredNewUserForCanRetrieve?.Length > 2){ _chosenUserAccessMapping.CanRetrieve.Add(_enteredNewUserForCanRetrieve); _enteredNewUserForCanRetrieve = default;} }">Add</button></td>
 
                             <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanEdit"></td>
                             <td><button class="btn btn-outline-primary "@onclick="() => {
-                                                                            if(_enteredNewUserForCanEdit?.Length > 2){ _chosenUserAccessMapping.CanChange.Add(_enteredNewUserForCanEdit); _enteredNewUserForCanEdit = default;} }">Add</button></td>
+                                if(_enteredNewUserForCanEdit?.Length > 2){ _chosenUserAccessMapping.CanChange.Add(_enteredNewUserForCanEdit); _enteredNewUserForCanEdit = default;} }">Add</button></td>
 
                             <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanDelete"></td>
                             <td><button class="btn btn-outline-primary" @onclick="() => {
-                                                                            if(_enteredNewUserForCanDelete?.Length > 2){ _chosenUserAccessMapping.CanDelete.Add(_enteredNewUserForCanDelete); _enteredNewUserForCanDelete = default;} }">Add</button></td>
+                                if(_enteredNewUserForCanDelete?.Length > 2){ _chosenUserAccessMapping.CanDelete.Add(_enteredNewUserForCanDelete); _enteredNewUserForCanDelete = default;} }">Add</button></td>
 
                         </tr>
                     }
@@ -117,8 +117,6 @@
 {
     private List<ApiParamUserAccessMapping> _userAccessMappings = [];
     private ApiParamUserAccessMapping? _chosenUserAccessMapping = default;
-    // private string ChosenOwnerId = "";
-    // private string ChosenResourceId = "";
     private string? _enteredNewUserForCanChangeAccess = "";
     private string? _enteredNewUserForCanRetrieve = "";
     private string? _enteredNewUserForCanEdit = "";
@@ -126,8 +124,6 @@
     protected override Task OnInitializedAsync()
     {
         InitSampleData();
-        // ChosenOwnerId = _userAccessMappings.FirstOrDefault()?.Owner ?? "";
-        // ChosenResourceId = _userAccessMappings.FirstOrDefault()?.BlobName ?? "";
         return base.OnInitializedAsync();
     }
 

@@ -424,10 +424,10 @@ app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateSe
         {
             BlobName = m.BlobName,
             Owner = m.Owner,
-            CanChangeAccess = m.CanChangeAccess.ToArray(),
-            CanChange = m.CanChangeAccess.ToArray(),
-            CanRetrieve = m.CanRetrieve.ToArray(),
-            CanDelete = m.CanDelete.ToArray()
+            CanChangeAccess = m.CanChangeAccess.ToList(),
+            CanChange = m.CanChangeAccess.ToList(),
+            CanRetrieve = m.CanRetrieve.ToList(),
+            CanDelete = m.CanDelete.ToList()
         });
     return Results.Json(allMappings);
 }).RequireAuthorization();
