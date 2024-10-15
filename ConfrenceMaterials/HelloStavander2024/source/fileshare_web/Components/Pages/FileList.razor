@@ -29,7 +29,7 @@
                 <tr>
                     <td>@file.Name</td>
                     <td>@file.Rights</td>
-                    <td><button class="btn btn-primary" hidden="@file.Delete">Delete</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Delete" @onclick="()=>DeleteFile(file.Name)">Delete</button></td>
                     <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
                 </tr>
             }
@@ -43,6 +43,11 @@
     protected override async Task OnInitializedAsync()
     {
         await FetchFilesFromApi();
+    }
+    private async Task DeleteFile(string fileName){
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        var filesaveResponse = await KafkaFileApiService.DeleteFile(accessToken, fileName);
+
     }
     private async Task AddFile(InputFileChangeEventArgs e)
     {
@@ -68,5 +73,6 @@
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
         var fileListFromApi = await KafkaFileApiService.GetListOfFiles(accessToken);
         _files = fileListFromApi;
+        StateHasChanged();
     }
 }
