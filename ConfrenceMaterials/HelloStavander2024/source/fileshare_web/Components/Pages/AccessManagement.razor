@@ -1,0 +1,204 @@
+@page "/access-management"
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
+@inject IJSRuntime Js;
+@inject ILogger<AccessManagement> Logger;
+@inject IHttpContextAccessor HttpContextAccessor;
+
+<h2>User Access Management</h2>
+
+<div id="userAccessMappingsContainer">
+    <div id="uamResourcesOverview">
+        <h3>Resources overview</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Resource Owner</th>
+                    <th>Resource Name</th>
+                </tr>
+            </thead>
+            <tbody>
+            @foreach (var uam in _userAccessMappings)
+            {
+                <tr>
+                    <td>@uam.Owner</td>
+                    <td>@uam.BlobName</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+    <div id="uamUpdateAccessPane">
+        <h3>Update resource access</h3>
+        <div class="form-group">
+            <label for="exampleFormControlSelect1">Resource Owner</label>
+            <select class="form-control" id="exampleFormControlSelect1" @bind="@ChosenOwnerId">
+                <option value=""></option>
+                @foreach (var uam in _userAccessMappings)
+                {
+                    <option value="@uam.Owner">@uam.Owner</option>
+                }
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="exampleFormControlSelect1">Resource Name</label>
+            <select class="form-control" id="exampleFormControlSelect1" @bind="@ChosenResourceId">
+                <option value=""></option>
+                @foreach (var uam in _userAccessMappings)
+                {
+                    <option value="@uam.BlobName">@uam.BlobName</option>
+                }
+            </select>
+        </div>
+        <div id="uamUpdateAccessPaneDetails">
+            <table>
+                <thead>
+                <tr>
+                    <td>Change Access</td>
+                    <td>Read</td>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var uam in _userAccessMappings)
+                {
+                <tr>
+                    <td>@uam.Owner</td>
+                    <td>@uam.BlobName</td>
+                </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+@* *@
+@* <div id="userAccessMappingsContainer" class="accordion"> *@
+@*     @for(var i = 0; i < _userAccessMappings.Count; i++) *@
+@*     { *@
+@*         <div class="accordion-item"> *@
+@*             <h3 id="uam-heading-@i" class="accordion-header"> *@
+@*                 <button class="accordion-button" type="button" data-bstoggle="collapse" data-bs-target="#uam-collapse-@i" aria-expanded="false" aria-controls="uam-collapse-@i"> *@
+@*                     @_userAccessMappings[i].Owner &DoubleRightArrow; @_userAccessMappings[i].BlobName *@
+@*                 </button> *@
+@*             </h3> *@
+@*             <div id="uam-collapse-@i" class="accordion-collapse collapseß" aria-labelledby="uam-heading-@i" data-bs-parent="#userAccessMappingsContainer"> *@
+@*                 <div class="accordion-body"> *@
+@*                     <div class="userAccessMappingsGridForResource"> *@
+@*                         <ul class="uamGridColumn"> *@
+@*                             <li class="uamGridRowItem">Access Managers</li> *@
+@*                             @for (var j = 0; j < _userAccessMappings[i].CanChangeAccess.Length; j++) *@
+@*                             { *@
+@*                                 <li class="uamGridRowItem"> *@
+@*                                     @_userAccessMappings[i].CanChangeAccess[j] *@
+@*                                 </li> *@
+@*                             } *@
+@*                             @if (UserCanEditAccessMapping(_userAccessMappings[i])) *@
+@*                             { *@
+@*                                 <li class="uamGridRowItem mb-2"><input id="uam-@i-add-user" class="form-control" type="text" placeholder="someone@example.com"></li> *@
+@*                             } *@
+@*                         </ul> *@
+@*                         <ul class="uamGridColumn"> *@
+@*                             <li class="uamGridRowItem">Read Access</li> *@
+@*                             @for (var j = 0; j < _userAccessMappings[i].CanRetrieve.Length; j++) *@
+@*                             { *@
+@*                                 <li class="uamGridRowItem"> *@
+@*                                     @_userAccessMappings[i].CanRetrieve[j] *@
+@*                                 </li> *@
+@*                             } *@
+@*                         </ul> *@
+@*                         <ul class="uamGridColumn"> *@
+@*                             <li class="uamGridRowItem">Upadte Access</li> *@
+@*                             @for (var j = 0; j < _userAccessMappings[i].CanChange.Length; j++) *@
+@*                             { *@
+@*                                 <li class="uamGridRowItem"> *@
+@*                                     @_userAccessMappings[i].CanChange[j] *@
+@*                                 </li> *@
+@*                             } *@
+@*                         </ul> *@
+@*                         <ul class="uamGridColumn"> *@
+@*                             <li class="uamGridRowItem">Delete Access</li> *@
+@*                             @for (var j = 0; j < _userAccessMappings[i].CanDelete.Length; j++) *@
+@*                             { *@
+@*                                 <li class="uamGridRowItem"> *@
+@*                                     @_userAccessMappings[i].CanDelete[j] *@
+@*                                 </li> *@
+@*                             } *@
+@*                         </ul> *@
+@*                     </div> *@
+@*                 </div> *@
+@*             </div> *@
+@*         </div> *@
+@*     } *@
+@*     <div class="accordion-item"></div> *@
+@* </div> *@
+
+@code
+{
+    private List<ApiParamUserAccessMapping> _userAccessMappings = [];
+    private string ChosenOwnerId = "";
+    private string ChosenResourceId = "";
+    protected override Task OnInitializedAsync()
+    {
+        InitSampleData();
+        // ChosenOwnerId = _userAccessMappings.FirstOrDefault()?.Owner ?? "";
+        // ChosenResourceId = _userAccessMappings.FirstOrDefault()?.BlobName ?? "";
+        return base.OnInitializedAsync();
+    }
+
+    private bool UserCanEditAccessMapping(ApiParamUserAccessMapping accessMapping)
+    {
+        var userId = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+        if (userId == null) return false;
+        return accessMapping.Owner == userId || accessMapping.CanChangeAccess.Contains(userId);
+    }
+
+    private void InitSampleData()
+    {
+        var userId = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value ?? "Failed to get user ID";
+        _userAccessMappings.Add(new ApiParamUserAccessMapping
+        {
+            BlobName = "Example resource ID 1",
+            Owner = userId,
+            CanChangeAccess = ["a@example.com", "b@example.com", "c@example.com"],
+            CanChange = ["a@example.com", "b@example.com", "c@example.com", "d@example.com"],
+            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanDelete = ["a@example.com"]
+        });
+        _userAccessMappings.Add(new ApiParamUserAccessMapping
+        {
+            BlobName = "Example resource ID 2",
+            Owner = userId,
+            CanChangeAccess = [],
+            CanChange = [],
+            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanDelete = []
+        });
+        _userAccessMappings.Add(new ApiParamUserAccessMapping
+        {
+            BlobName = "Example resource ID 3",
+            Owner = userId,
+            CanChangeAccess = [],
+            CanChange = [],
+            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanDelete = []
+        });
+        _userAccessMappings.Add(new ApiParamUserAccessMapping
+        {
+            BlobName = "Example resource ID 2",
+            Owner = "a@example.com",
+            CanChangeAccess = ["a@example.com", userId, "b@example.com", "c@example.com"],
+            CanChange = ["a@example.com", "b@example.com", "c@example.com", "d@example.com"],
+            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanDelete = ["a@example.com"]
+        });
+        _userAccessMappings.Add(new ApiParamUserAccessMapping
+        {
+            BlobName = "Example resource ID 1",
+            Owner = "b@example.com",
+            CanChangeAccess = ["a@example.com", userId, "b@example.com", "c@example.com"],
+            CanChange = ["a@example.com", "b@example.com", "c@example.com", "d@example.com"],
+            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanDelete = ["a@example.com"]
+        });
+    }
+}

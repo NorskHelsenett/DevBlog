@@ -1,0 +1,9 @@
+#userAccessMappingsContainer {
+    display: grid;
+}
+#uamResourcesOverview {
+    grid-column: 1;
+}
+#uamUpdateAccessPane {
+    grid-column: 2;
+}
