@@ -1,5 +1,13 @@
+using System.Text.Json;
+
 public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<KafkaUserAccessManagementApiService> logger)
 {
+
+    JsonSerializerOptions serializeOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true
+    };
     public async Task<List<ApiParamUserAccessMapping>> GetUserAccessMappings(string accessToken)
     {
         var address = $"{Environment.GetEnvironmentVariable("FILESHARE_WEB_REMOTE_FILE_API_ADDRESS")}/userAccessMappings";
@@ -9,13 +17,13 @@ public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<
         {
             var response = await httpClient.SendAsync(request);
             var responseString = await response.Content.ReadAsStringAsync();
-            var responseParsed = System.Text.Json.JsonSerializer.Deserialize<List<ApiParamUserAccessMapping>>(responseString);
+            logger.LogDebug($"Response when requesting user access mappings\n{responseString}");
+            var responseParsed = System.Text.Json.JsonSerializer.Deserialize<List<ApiParamUserAccessMapping>>(responseString, serializeOptions);
             return responseParsed ?? [];
         }
         catch (Exception e) {
             Console.WriteLine("\n\nRequest to external service failed");
             Console.WriteLine(e);
-            // return $"Stack: {e.StackTrace}"; // Don't do this at home
         }
 
         return [];
@@ -36,9 +44,6 @@ public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<
         catch (Exception e) {
             Console.WriteLine("\n\nRequest to external service failed");
             Console.WriteLine(e);
-            // return $"Stack: {e.StackTrace}"; // Don't do this at home
         }
     }
 }
-//updateUserAccessMapping
-// GET {{baseurl}}/userAccessMappings

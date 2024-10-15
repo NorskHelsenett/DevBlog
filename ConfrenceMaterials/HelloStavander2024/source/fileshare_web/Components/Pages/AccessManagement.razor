@@ -1,7 +1,9 @@
 @page "/access-management"
 @using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
 @inject ILogger<AccessManagement> Logger;
 @inject IHttpContextAccessor HttpContextAccessor;
+@inject KafkaUserAccessManagementApiService KafkaUserAccessManagementApiService;
 
 <h2>User Access Management</h2>
 
@@ -34,7 +36,7 @@
         {
             <h3>Update resource access for <span class="font-italic">@_chosenUserAccessMapping.Owner</span>:<span class="font-weight-bold">@_chosenUserAccessMapping.BlobName</span></h3>
             <div>
-                <button class="btn btn-primary">Save</button>
+                <button class="btn btn-primary" @onclick="SaveUserAccessMapping">Save</button>
                 <button class="btn btn btn-danger">Delete</button>
             </div>
             <div id="uamUpdateAccessPaneDetails">
@@ -126,10 +128,13 @@
     private string? _enteredNewUserForCanRetrieve = "";
     private string? _enteredNewUserForCanEdit = "";
     private string? _enteredNewUserForCanDelete = "";
-    protected override Task OnInitializedAsync()
+
+    protected override async Task OnInitializedAsync()
     {
-        InitSampleData();
-        return base.OnInitializedAsync();
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        _userAccessMappings  = await KafkaUserAccessManagementApiService.GetUserAccessMappings(accessToken);
+        // InitSampleData();
+        await base.OnInitializedAsync();
     }
 
     private bool UserCanEditAccessMapping(ApiParamUserAccessMapping accessMapping)
@@ -137,6 +142,13 @@
         var userId = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
         if (userId == null) return false;
         return accessMapping.Owner == userId || accessMapping.CanChangeAccess.Contains(userId);
+    }
+
+    private async void SaveUserAccessMapping()
+    {
+        if(_chosenUserAccessMapping == default) return;
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        await KafkaUserAccessManagementApiService.RegisterUserAccessMappings(accessToken, _chosenUserAccessMapping);
     }
 
     private void AddNewResourceToManage()
@@ -154,7 +166,7 @@
         };
         _userAccessMappings.Add(createdAccessMapping);
         _enteredNewResourceIdentifier = "";
-        // _chosenUserAccessMapping = createdAccessMapping;
+        _chosenUserAccessMapping = createdAccessMapping;
     }
 
     private void InitSampleData()
