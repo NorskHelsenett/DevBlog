@@ -5,11 +5,11 @@ namespace fileshare_web;
 
 public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor httpContextAccessor, ILogger<KafkaFileApiService> logger)
 {
-    public async Task<bool> SaveFile(string accessToken, Stream fileToSave){
+    public async Task<bool> SaveFile(string accessToken, Stream fileToSave, string fileName){
         var address = $"{Environment.GetEnvironmentVariable("FILESHARE_WEB_REMOTE_FILE_API_ADDRESS")}/store";
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(address));
         request.Content = new StreamContent(fileToSave);
-        request.Headers.Add("X-Blob-Name", "testing");
+        request.Headers.Add("X-Blob-Name", fileName);
         request.Headers.Add("Authorization", $"Bearer {accessToken}");
         try
         {

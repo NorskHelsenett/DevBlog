@@ -16,30 +16,30 @@
 <div>
     <table>
         <thead>
-        <tr>
-            <th>Name</th>
-            <th>Rights</th>
-            <th>Delete</th>
-            <th>Download</th>
-        </tr>
+            <tr>
+                <th>Name</th>
+                <th>Rights</th>
+                <th>Delete</th>
+                <th>Download</th>
+            </tr>
         </thead>
         <tbody>
-        @foreach (var file in _files)
-        {
-            <tr>
-                <td>@file.Name</td>
-                <td>@file.Rights</td>
-                <td><button class="btn btn-primary" hidden="@file.Delete">Delete</button></td>
-                <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
-            </tr>
-        }
+            @foreach (var file in _files)
+            {
+                <tr>
+                    <td>@file.Name</td>
+                    <td>@file.Rights</td>
+                    <td><button class="btn btn-primary" hidden="@file.Delete">Delete</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
+                </tr>
+            }
         </tbody>
     </table>
 </div>
 
 @code {
     private List<SecretFile> _files = new();
-    
+
     protected override async Task OnInitializedAsync()
     {
         await FetchFilesFromApi();
@@ -47,16 +47,16 @@
     private async Task AddFile(InputFileChangeEventArgs e)
     {
         Logger.LogDebug($"Trying to do some stuff on client side: {e.FileCount}, filename: {e.File.Name} size {e.File.Size}");
-        
-        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
-        var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, e.File.OpenReadStream());
 
-            if(filesaveResponse){
-                Logger.LogDebug("Upload Serverside worked");
-                return;
-            }
-            Logger.LogWarning("upload had some trouble");
-        Logger.LogDebug("Doing clientside upload, it is probably a laarge file");
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, e.File.OpenReadStream(), e.File.Name);
+
+        if (filesaveResponse)
+        {
+            Logger.LogDebug("Upload Serverside worked");
+            return;
+        }
+        Logger.LogWarning("upload had some trouble");
     }
 
     private async Task FetchFilesFromApi()
