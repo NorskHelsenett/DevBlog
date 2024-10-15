@@ -1,5 +1,6 @@
 #userAccessMappingsContainer {
     display: grid;
+    gap: 1rem;
 }
 uamResourcesOverview {
     grid-column: 1;

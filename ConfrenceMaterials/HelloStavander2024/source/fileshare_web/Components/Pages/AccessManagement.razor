@@ -10,7 +10,7 @@
 <div id="userAccessMappingsContainer">
     <div id="uamResourcesOverview">
         <h3>Resources overview</h3>
-        <table>
+        <table class="table table-striped table-hover">
             <thead>
                 <tr>
                     <th>Resource Owner</th>
@@ -34,23 +34,23 @@
         {
             <p><span>@_chosenUserAccessMapping.Owner</span>:<span>@_chosenUserAccessMapping.BlobName</span></p>
             <div id="uamUpdateAccessPaneDetails">
-                <table>
+                <table class="table table-striped">
                     <thead>
                     <tr>
-                        <td colspan="2">Change Access</td>
-                        <td colspan="2">Retrieve</td>
-                        <td colspan="2">Edit</td>
-                        <td colspan="2">Delete</td>
+                        <th colspan="2">Change Access</th>
+                        <th colspan="2">Retrieve</th>
+                        <th colspan="2">Edit</th>
+                        <th colspan="2">Delete</th>
                     </tr>
                     </thead>
                     <tbody>
                     @if (UserCanEditAccessMapping(_chosenUserAccessMapping))
                     {
                         <tr>
-                            <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com"></td><td><button>Add</button></td>
-                            <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com"></td><td><button>Add</button></td>
-                            <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com"></td><td><button>Add</button></td>
-                            <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com"></td><td><button>Add</button></td>
+                            <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
+                            <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
+                            <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
+                            <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
                         </tr>
                     }
                     @for(var i = 0; i < _chosenUserAccessMapping.CanChangeAccess.Length
@@ -63,7 +63,7 @@
                             {
                                 <td>@_chosenUserAccessMapping.CanChangeAccess[i]</td>
                                 <td>
-                                    @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}
+                                    @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
                                 </td>
                             }
                             else {<td></td><td></td>}
@@ -71,7 +71,7 @@
                             {
                                 <td>@_chosenUserAccessMapping.CanRetrieve[i]</td>
                                 <td>
-                                    @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}
+                                    @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
                                 </td>
                             }
                             else {<td></td><td></td>}
@@ -79,7 +79,7 @@
                             {
                             <td>@_chosenUserAccessMapping.CanChange[i]</td>
                             <td>
-                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}
+                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
                             </td>
                             }
                             else {<td></td><td></td>}
@@ -87,7 +87,7 @@
                             {
                             <td>@_chosenUserAccessMapping.CanDelete[i]</td>
                             <td>
-                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button>Delete</button>}
+                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
                             </td>
                             }
                             else {<td></td><td></td>}
