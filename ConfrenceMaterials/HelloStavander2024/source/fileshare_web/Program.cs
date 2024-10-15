@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddScoped<IChungingProducer, MockProducer>();
 builder.Services.AddScoped<FileController>();
 builder.Services.AddScoped<KafkaFileApiService>();
+builder.Services.AddScoped<KafkaUserAccessManagementApiService>();
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
