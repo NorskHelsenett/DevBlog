@@ -6,7 +6,7 @@ namespace fileshare_web;
 public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor httpContextAccessor, ILogger<KafkaFileApiService> logger)
 {
     public async Task<bool> DeleteFile(string accessToken, string fileName){
-        
+
         var address = $"{Environment.GetEnvironmentVariable("FILESHARE_WEB_REMOTE_FILE_API_ADDRESS")}/remove";
         var request = new HttpRequestMessage(HttpMethod.Post, new Uri(address));
         request.Headers.Add("X-Blob-Name", fileName);
@@ -18,7 +18,7 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
         }
         catch (Exception e) {
             logger.LogError(e,"\n\nRequest to external service failed");
-            
+
         }
 
         return false;
@@ -52,11 +52,18 @@ public class KafkaFileApiService(HttpClient httpClient, HttpContextAccessor http
         try
         {
             var response = httpClient.SendAsync(request).Result;
-            var responseString = response.Content.ReadAsStringAsync().Result;
-            logger.LogDebug(responseString);
-            var responseItems = responseString.Split("\\n");
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            {
+                var responseString = response.Content.ReadAsStringAsync().Result;
+                logger.LogDebug(responseString);
+                if (string.IsNullOrWhiteSpace(responseString))
+                {
+                    return [];
+                }
+                var responseItems = responseString.Split("\\n");
 
-            return responseItems.Select(MappToSecretFile).ToList();
+                return responseItems.Select(MappToSecretFile).ToList();
+            }
         }
         catch (Exception e) {
 

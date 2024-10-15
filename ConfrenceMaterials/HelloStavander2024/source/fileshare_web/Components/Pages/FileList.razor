@@ -4,6 +4,7 @@
 @inject ILogger<FileList> Logger;
 @inject IHttpContextAccessor HttpContextAccessor;
 @inject KafkaFileApiService KafkaFileApiService;
+@inject ToastService ToastService
 
 <PageTitle>File List</PageTitle>
 
@@ -56,15 +57,33 @@
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
         var stream = e.File.OpenReadStream(maxAllowedSize: long.MaxValue);
         Logger.LogDebug("Stream opened, calling further down the chain");
+        ToastService.ShowToast(
+            message: "Upload started",
+            level: ToastLevel.Info,
+            duration: TimeSpan.FromSeconds(1)
+        );
         var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, stream, e.File.Name);
-
         if (filesaveResponse)
         {
             Logger.LogDebug("Upload Serverside worked");
-            return;
+            ToastService.ShowToast(
+                message: "Uploaded",
+                level: ToastLevel.Success,
+                duration: TimeSpan.FromSeconds(1)
+            );
+            await Task.Delay(TimeSpan.FromSeconds(4));
         }
-        Logger.LogWarning("upload had some trouble");
+        else
+        {
+            Logger.LogWarning("upload had some trouble");
+            ToastService.ShowToast(
+                message: $"Failed during upload",
+                level: ToastLevel.Error,
+                duration: TimeSpan.FromSeconds(7)
+            );
+        }
         await FetchFilesFromApi();
+        StateHasChanged();
     }
 
     private async Task FetchFilesFromApi()
