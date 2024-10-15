@@ -47,47 +47,60 @@
                     @if (UserCanEditAccessMapping(_chosenUserAccessMapping))
                     {
                         <tr>
-                            <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
-                            <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
-                            <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
-                            <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com"></td><td><button class="btn btn-outline-primary">Add</button></td>
+                            <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanChangeAccess"></td>
+                            <td><button class="btn btn-outline-primary" @onclick="() => {
+                                                                            if(_enteredNewUserForCanChangeAccess?.Length > 2){ _chosenUserAccessMapping.CanChangeAccess.Add(_enteredNewUserForCanChangeAccess); _enteredNewUserForCanChangeAccess = default;} }">Add</button></td>
+
+                            <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanRetrieve"></td>
+                            <td><button class="btn btn-outline-primary" @onclick="() => {
+                                                                            if(_enteredNewUserForCanRetrieve?.Length > 2){ _chosenUserAccessMapping.CanRetrieve.Add(_enteredNewUserForCanRetrieve); _enteredNewUserForCanRetrieve = default;} }">Add</button></td>
+
+                            <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanEdit"></td>
+                            <td><button class="btn btn-outline-primary "@onclick="() => {
+                                                                            if(_enteredNewUserForCanEdit?.Length > 2){ _chosenUserAccessMapping.CanChange.Add(_enteredNewUserForCanEdit); _enteredNewUserForCanEdit = default;} }">Add</button></td>
+
+                            <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanDelete"></td>
+                            <td><button class="btn btn-outline-primary" @onclick="() => {
+                                                                            if(_enteredNewUserForCanDelete?.Length > 2){ _chosenUserAccessMapping.CanDelete.Add(_enteredNewUserForCanDelete); _enteredNewUserForCanDelete = default;} }">Add</button></td>
+
                         </tr>
                     }
-                    @for(var i = 0; i < _chosenUserAccessMapping.CanChangeAccess.Length
-                                || i < _chosenUserAccessMapping.CanRetrieve.Length
-                                || i < _chosenUserAccessMapping.CanChange.Length
-                                || i < _chosenUserAccessMapping.CanDelete.Length; i++)
+                    @for(var i = 0; i < _chosenUserAccessMapping.CanChangeAccess.Count
+                                 || i < _chosenUserAccessMapping.CanRetrieve.Count
+                                 || i < _chosenUserAccessMapping.CanChange.Count
+                                 || i < _chosenUserAccessMapping.CanDelete.Count; i++)
                     {
+                        int cpy = i;
                         <tr>
-                            @if (i < _chosenUserAccessMapping.CanChangeAccess.Length)
+                            @if (i < _chosenUserAccessMapping.CanChangeAccess.Count)
                             {
-                                <td>@_chosenUserAccessMapping.CanChangeAccess[i]</td>
-                                <td>
-                                    @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
-                                </td>
-                            }
-                            else {<td></td><td></td>}
-                            @if (i < _chosenUserAccessMapping.CanRetrieve.Length)
-                            {
-                                <td>@_chosenUserAccessMapping.CanRetrieve[i]</td>
-                                <td>
-                                    @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
-                                </td>
-                            }
-                            else {<td></td><td></td>}
-                            @if (i < _chosenUserAccessMapping.CanChange.Length)
-                            {
-                            <td>@_chosenUserAccessMapping.CanChange[i]</td>
+                            <td>@_chosenUserAccessMapping.CanChangeAccess[i]</td>
                             <td>
-                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
+                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger" @onclick="() => _chosenUserAccessMapping.CanChangeAccess.RemoveAt(cpy)">Delete</button>}
                             </td>
                             }
                             else {<td></td><td></td>}
-                            @if (i < _chosenUserAccessMapping.CanDelete.Length)
+                            @if (i < _chosenUserAccessMapping.CanRetrieve.Count)
+                            {
+                            <td>@_chosenUserAccessMapping.CanRetrieve[i]</td>
+                            <td>
+                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger" @onclick="() => _chosenUserAccessMapping.CanRetrieve.RemoveAt(cpy)">Delete</button>}
+                            </td>
+                            }
+                            else {<td></td><td></td>}
+                            @if (i < _chosenUserAccessMapping.CanChange.Count)
+                            {
+                            <td>@_chosenUserAccessMapping.CanChange[i]</td>
+                            <td>
+                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger" @onclick="() => _chosenUserAccessMapping.CanChange.RemoveAt(cpy)">Delete</button>}
+                            </td>
+                            }
+                            else {<td></td><td></td>}
+                            @if (i < _chosenUserAccessMapping.CanDelete.Count)
                             {
                             <td>@_chosenUserAccessMapping.CanDelete[i]</td>
                             <td>
-                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger">Delete</button>}
+                                @if(UserCanEditAccessMapping(_chosenUserAccessMapping)){<button class="btn btn-outline-danger" @onclick="() => _chosenUserAccessMapping.CanDelete.RemoveAt(cpy)">Delete</button>}
                             </td>
                             }
                             else {<td></td><td></td>}
@@ -104,8 +117,12 @@
 {
     private List<ApiParamUserAccessMapping> _userAccessMappings = [];
     private ApiParamUserAccessMapping? _chosenUserAccessMapping = default;
-    private string ChosenOwnerId = "";
-    private string ChosenResourceId = "";
+    // private string ChosenOwnerId = "";
+    // private string ChosenResourceId = "";
+    private string? _enteredNewUserForCanChangeAccess = "";
+    private string? _enteredNewUserForCanRetrieve = "";
+    private string? _enteredNewUserForCanEdit = "";
+    private string? _enteredNewUserForCanDelete = "";
     protected override Task OnInitializedAsync()
     {
         InitSampleData();
@@ -119,6 +136,11 @@
         var userId = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
         if (userId == null) return false;
         return accessMapping.Owner == userId || accessMapping.CanChangeAccess.Contains(userId);
+    }
+
+    private void RemoveFromCanChangeForChosenUser(string userToRemove)
+    {
+        _chosenUserAccessMapping?.CanChange.Remove(userToRemove);
     }
 
     private void InitSampleData()
