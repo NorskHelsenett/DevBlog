@@ -13,7 +13,7 @@ builder.Services.AddHostedService<BlobMetadataConsumer>();
 builder.Services.AddHostedService<UserAccessMappingConsumer>();
 builder.Services.AddSingleton<OutputStateService>();
 builder.Services.AddSingleton<UserAccessMappingStateService>();
-builder.Services.AddScoped<UserAccessMappingProducer>();
+builder.Services.AddSingleton<UserAccessMappingProducer>();
 
 HttpClient httpClient;
 if (Environment.GetEnvironmentVariable(HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES) == "false")
@@ -319,6 +319,42 @@ app.MapGet("/list", (HttpContext context, OutputStateService stateService, UserA
 })
 .RequireAuthorization();
 
+app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateService userAccessMappingStateService) =>
+{
+    var correlationId = System.Guid.NewGuid().ToString("D");
+    if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
+    {
+        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
+        {
+            correlationId = headerCorrelationId.ToString();
+        }
+    }
+    app.Logger.LogInformation($"CorrelationId {correlationId} Received request to retrieve list of user access mappings");
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.Unauthorized();
+    }
+    var allMappings = userAccessMappingStateService.GetAllUserAccessMappings()
+        .Where(uam => uam.Owner == userEmailClaim
+            || uam.CanChangeAccess.Contains(userEmailClaim)
+            || uam.CanChange.Contains(userEmailClaim)
+            || uam.CanRetrieve.Contains(userEmailClaim)
+            || uam.CanDelete.Contains(userEmailClaim))
+        .Select(m => new ApiParamUserAccessMapping
+        {
+            BlobName = m.BlobName,
+            Owner = m.Owner,
+            CanChangeAccess = m.CanChangeAccess.ToList(),
+            CanChange = m.CanChangeAccess.ToList(),
+            CanRetrieve = m.CanRetrieve.ToList(),
+            CanDelete = m.CanDelete.ToList()
+        });
+    return Results.Json(allMappings);
+}).RequireAuthorization();
+
 app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context, UserAccessMappingStateService userAccessMappingStateService, UserAccessMappingProducer userAccessMappingProducer) =>
 {
     var correlationId = System.Guid.NewGuid().ToString("D");
@@ -395,42 +431,6 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
     return Results.StatusCode(StatusCodes.Status500InternalServerError);
 })
 .RequireAuthorization();
-
-app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateService userAccessMappingStateService) =>
-{
-    var correlationId = System.Guid.NewGuid().ToString("D");
-    if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
-    {
-        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
-        {
-            correlationId = headerCorrelationId.ToString();
-        }
-    }
-    app.Logger.LogInformation($"CorrelationId {correlationId} Received request to retrieve list of user access mappings");
-    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
-    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
-    if (string.IsNullOrEmpty(userEmailClaim))
-    {
-        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
-        return Results.Unauthorized();
-    }
-    var allMappings = userAccessMappingStateService.GetAllUserAccessMappings()
-        .Where(uam => uam.Owner == userEmailClaim
-            || uam.CanChangeAccess.Contains(userEmailClaim)
-            || uam.CanChange.Contains(userEmailClaim)
-            || uam.CanRetrieve.Contains(userEmailClaim)
-            || uam.CanDelete.Contains(userEmailClaim))
-        .Select(m => new ApiParamUserAccessMapping
-        {
-            BlobName = m.BlobName,
-            Owner = m.Owner,
-            CanChangeAccess = m.CanChangeAccess.ToList(),
-            CanChange = m.CanChangeAccess.ToList(),
-            CanRetrieve = m.CanRetrieve.ToList(),
-            CanDelete = m.CanDelete.ToList()
-        });
-    return Results.Json(allMappings);
-}).RequireAuthorization();
 
 app.MapPost("/deleteUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context, UserAccessMappingStateService userAccessMappingStateService, UserAccessMappingProducer userAccessMappingProducer) =>
 {

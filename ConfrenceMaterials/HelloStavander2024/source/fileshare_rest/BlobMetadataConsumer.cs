@@ -2,19 +2,24 @@ using Confluent.Kafka;
 using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry.Serdes;
 using KafkaBlobChunking;
+using Timestamp = Google.Protobuf.WellKnownTypes.Timestamp;
 
 public class BlobMetadataConsumer: BackgroundService
 {
     private readonly ILogger<BlobMetadataConsumer> _logger;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
     private readonly OutputStateService _outputStateService;
+    private readonly UserAccessMappingStateService _userAccessMappingStateService;
+    private readonly UserAccessMappingProducer _userAccessMappingProducer;
     private readonly string _topicMetadata;
 
-    public BlobMetadataConsumer(ILogger<BlobMetadataConsumer> logger, IHostApplicationLifetime hostApplicationLifetime, OutputStateService outputStateService)
+    public BlobMetadataConsumer(ILogger<BlobMetadataConsumer> logger, IHostApplicationLifetime hostApplicationLifetime, OutputStateService outputStateService, UserAccessMappingStateService userAccessMappingStateService, UserAccessMappingProducer userAccessMappingProducer)
     {
         _logger = logger;
         _hostApplicationLifetime = hostApplicationLifetime;
         _outputStateService = outputStateService;
+        _userAccessMappingStateService = userAccessMappingStateService;
+        _userAccessMappingProducer = userAccessMappingProducer;
 
         var topicNameMetadataTopic = Environment.GetEnvironmentVariable(BIG_PAYLOADS_METADATA_TOPIC);
         if(string.IsNullOrWhiteSpace(topicNameMetadataTopic))
@@ -57,11 +62,24 @@ public class BlobMetadataConsumer: BackgroundService
                 }
                 else
                 {
-                    _logger.LogDebug($"New blob metadata event received");
+                    _logger.LogDebug("New blob metadata event received");
                     var nextBlobMetadata = result.Message.Value;
                     if (nextBlobMetadata != null)
                     {
-                        _outputStateService.Store(blobChunksMetadata: nextBlobMetadata, correlationId: nextBlobMetadata.FinalChecksum);
+                        _outputStateService.Store(blobChunksMetadata: nextBlobMetadata, correlationId: nextBlobMetadata.CorrelationId);
+                        var userAccessMappingRegistered = _userAccessMappingStateService.TryGetUserAccessMapping(blobId: result.Message.Key, out _);
+                        if (!userAccessMappingRegistered)
+                        {
+                            await _userAccessMappingProducer.ProduceUserAccessMappingAsync(new UserAccessMapping
+                            {
+                                BlobName = nextBlobMetadata.BlobName,
+                                Owner = nextBlobMetadata.BlobOwnerId,
+                                UpdatedAt =
+                                    Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow),
+                                UpdatedBy = nextBlobMetadata.BlobOwnerId,
+                                CorrelationId = nextBlobMetadata.CorrelationId,
+                            }, result.Message.Key, stoppingToken);
+                        }
                         _logger.LogDebug($"Consumed metadata for blob with id \"{result.Message.Key}\"");
                     }
                     else
