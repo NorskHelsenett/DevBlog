@@ -47,4 +47,24 @@ public class KafkaUserAccessManagementApiService(HttpClient httpClient, ILogger<
         }
         return false;
     }
+
+    public async Task<bool> DeleteUserAccessMappings(string accessToken, ApiParamUserAccessMapping userAccessMapping)
+    {
+        var address = $"{Environment.GetEnvironmentVariable("FILESHARE_WEB_REMOTE_FILE_API_ADDRESS")}/deleteUserAccessMapping";
+        var request = new HttpRequestMessage(HttpMethod.Post, new Uri(address));
+        request.Headers.Add("Authorization", $"Bearer {accessToken}");
+        request.Content = JsonContent.Create(userAccessMapping);
+        try
+        {
+            var response = await httpClient.SendAsync(request);
+            var responseString = await response.Content.ReadAsStringAsync();
+            logger.LogDebug(responseString);
+            return true;
+        }
+        catch (Exception e) {
+            Console.WriteLine("\n\nRequest to external service failed");
+            Console.WriteLine(e);
+        }
+        return false;
+    }
 }

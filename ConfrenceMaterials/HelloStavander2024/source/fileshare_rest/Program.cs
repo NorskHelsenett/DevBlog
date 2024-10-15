@@ -432,6 +432,83 @@ app.MapGet("/userAccessMappings", (HttpContext context, UserAccessMappingStateSe
     return Results.Json(allMappings);
 }).RequireAuthorization();
 
+app.MapPost("/deleteUserAccessMapping", async (ApiParamUserAccessMapping apiParamUserAccessMapping, HttpContext context, UserAccessMappingStateService userAccessMappingStateService, UserAccessMappingProducer userAccessMappingProducer) =>
+{
+    var correlationId = System.Guid.NewGuid().ToString("D");
+    if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
+    {
+        if(!string.IsNullOrWhiteSpace(headerCorrelationId.ToString()))
+        {
+            correlationId = headerCorrelationId.ToString();
+        }
+    }
+
+    var cancellationToken = context.Request.HttpContext.RequestAborted;
+    var userEmailClaim = context.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+    app.Logger.LogDebug($"CorrelationId {correlationId} Current user email: \"{userEmailClaim}\"");
+    if (string.IsNullOrEmpty(userEmailClaim))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} failed to auth user because email claim in token appears to be empty");
+        return Results.Unauthorized();
+    }
+
+    var updatedUserAccessMapping = new UserAccessMapping
+    {
+        BlobName = apiParamUserAccessMapping.BlobName,
+        Owner = apiParamUserAccessMapping.Owner,
+        CanChangeAccess = { apiParamUserAccessMapping.CanChangeAccess },
+        CanRetrieve = { apiParamUserAccessMapping.CanRetrieve },
+        CanChange = { apiParamUserAccessMapping.CanChange },
+        CanDelete = { apiParamUserAccessMapping.CanDelete },
+        UpdatedAt = Google.Protobuf.WellKnownTypes.Timestamp.FromDateTimeOffset(DateTimeOffset.UtcNow),
+        UpdatedBy = userEmailClaim,
+        CorrelationId = correlationId,
+    };
+
+    var internalBlobId = GetBlobId(nameOfOwner: apiParamUserAccessMapping.Owner, suppliedBlobName: apiParamUserAccessMapping.BlobName);
+    var accessMappingAlreadyExists = userAccessMappingStateService.TryGetUserAccessMapping(internalBlobId, out var preExistingAccessMapping);
+    if (!accessMappingAlreadyExists)
+    {
+        app.Logger.LogInformation($"CorrelationId {correlationId} user {userEmailClaim} tried to delete access configs that don't exists. The permissions they tried to delete were {updatedUserAccessMapping}.");
+        return Results.StatusCode(StatusCodes.Status200OK);
+    }
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && (preExistingAccessMapping.Owner != userEmailClaim || preExistingAccessMapping.CanDelete.Contains(userEmailClaim)))
+    {
+        app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to delete access configs for object that they neither own nor have access to delete. This may indicate that they're trying to do mischief. The permissions they tried to delete were {updatedUserAccessMapping}. Noping out");
+        return Results.StatusCode(statusCode: StatusCodes.Status403Forbidden);
+    }
+
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && preExistingAccessMapping.Owner != apiParamUserAccessMapping.Owner)
+    {
+        app.Logger.LogInformation($"CorrelationId {correlationId} user {userEmailClaim} tried to delete resource, but supplied an altered owner for the resource to delete, which is weird. The permissions they tried to delete were {updatedUserAccessMapping}.");
+        return Results.Text(
+            content: $"Changing owner while deleting is not supported",
+            contentType: "text/html",
+            contentEncoding: Encoding.UTF8,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && preExistingAccessMapping.BlobName != apiParamUserAccessMapping.BlobName)
+    {
+        app.Logger.LogInformation($"CorrelationId {correlationId} user {userEmailClaim} tried to change target resource while performing a delete, which is not currently supported. The permissions they tried to set were {updatedUserAccessMapping}.");
+        return Results.Text(
+            content: $"Changing target resource while deletig is not supported",
+            contentType: "text/html",
+            contentEncoding: Encoding.UTF8,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+
+    app.Logger.LogInformation($"CorrelationId {correlationId} This is the user access mapping object {updatedUserAccessMapping} that will be deleted");
+    var produceResult = await userAccessMappingProducer.ProduceUserAccessMappingAsync(null, internalBlobId, cancellationToken);
+    if (produceResult)
+    {
+        return Results.Ok($"Successfully deleted user access mapping");
+    }
+
+    return Results.StatusCode(StatusCodes.Status500InternalServerError);
+})
+.RequireAuthorization();
+
 app.MapGet("/healthz", () => Results.Ok("Started successfully"));
 app.MapGet("/healthz/live", () => Results.Ok("Alive and well"));
 app.MapGet("/healthz/ready", (OutputStateService outputStateService) =>

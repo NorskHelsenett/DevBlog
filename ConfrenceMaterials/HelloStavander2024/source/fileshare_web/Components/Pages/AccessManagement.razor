@@ -38,7 +38,7 @@
             <h3>Update resource access for <span class="text-info">@_chosenUserAccessMapping.Owner</span>:<span class="text-primary">@_chosenUserAccessMapping.BlobName</span></h3>
             <div>
                 <button class="btn btn-primary" @onclick="SaveUserAccessMapping">Save</button>
-                <button class="btn btn btn-danger">Delete</button>
+                <button class="btn btn btn-danger" @onclick="DeleteUserAccessMapping">Delete</button>
             </div>
             <div id="uamUpdateAccessPaneDetails">
                 <table class="table table-striped">
@@ -172,6 +172,39 @@
         {
             ToastService.ShowToast(
                 message: $"Failed to save",
+                level: ToastLevel.Error,
+                duration: TimeSpan.FromSeconds(7)
+            );
+        }
+    }
+
+    private async void DeleteUserAccessMapping()
+    {
+        if(_chosenUserAccessMapping == default) return;
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        ToastService.ShowToast(
+            message: "Deleting",
+            level: ToastLevel.Info,
+            duration: TimeSpan.FromSeconds(1)
+        );
+        var deleteSuccessful = await KafkaUserAccessManagementApiService.DeleteUserAccessMappings(accessToken, _chosenUserAccessMapping);
+        if (deleteSuccessful)
+        {
+            _chosenUserAccessMapping = default;
+            StateHasChanged();
+            ToastService.ShowToast(
+                message: "Deleted",
+                level: ToastLevel.Success,
+                duration: TimeSpan.FromSeconds(1)
+            );
+            await Task.Delay(TimeSpan.FromSeconds(2));
+            _userAccessMappings  = await KafkaUserAccessManagementApiService.GetUserAccessMappings(accessToken);
+            StateHasChanged();
+        }
+        else
+        {
+            ToastService.ShowToast(
+                message: $"Failed to delete",
                 level: ToastLevel.Error,
                 duration: TimeSpan.FromSeconds(7)
             );
