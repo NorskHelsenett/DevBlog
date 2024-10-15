@@ -1,7 +1,5 @@
 @page "/access-management"
 @using System.Security.Claims
-@using Microsoft.AspNetCore.Authentication
-@inject IJSRuntime Js;
 @inject ILogger<AccessManagement> Logger;
 @inject IHttpContextAccessor HttpContextAccessor;
 
@@ -9,13 +7,16 @@
 
 <div id="userAccessMappingsContainer">
     <div id="uamResourcesOverview">
+        <h3>Add new resource to manage</h3>
+        <input class="form-control mb-1" type="text" placeholder="your resource/identifier" @bind="_enteredNewResourceIdentifier"/>
+        <button class="btn btn-primary" @onclick="AddNewResourceToManage">Add</button>
         <h3>Resources overview</h3>
         <table class="table table-striped table-hover">
             <thead>
-                <tr>
-                    <th>Resource Owner</th>
-                    <th>Resource Name</th>
-                </tr>
+            <tr>
+                <th>Resource Owner</th>
+                <th>Resource Name</th>
+            </tr>
             </thead>
             <tbody>
             @foreach (var uam in _userAccessMappings)
@@ -29,10 +30,13 @@
         </table>
     </div>
     <div id="uamUpdateAccessPane">
-        <h3>Update resource access</h3>
         @if (_chosenUserAccessMapping != default)
         {
-            <p><span>@_chosenUserAccessMapping.Owner</span>:<span>@_chosenUserAccessMapping.BlobName</span></p>
+            <h3>Update resource access for <span class="font-italic">@_chosenUserAccessMapping.Owner</span>:<span class="font-weight-bold">@_chosenUserAccessMapping.BlobName</span></h3>
+            <div>
+                <button class="btn btn-primary">Save</button>
+                <button class="btn btn btn-danger">Delete</button>
+            </div>
             <div id="uamUpdateAccessPaneDetails">
                 <table class="table table-striped">
                     <thead>
@@ -117,6 +121,7 @@
 {
     private List<ApiParamUserAccessMapping> _userAccessMappings = [];
     private ApiParamUserAccessMapping? _chosenUserAccessMapping = default;
+    private string? _enteredNewResourceIdentifier = "";
     private string? _enteredNewUserForCanChangeAccess = "";
     private string? _enteredNewUserForCanRetrieve = "";
     private string? _enteredNewUserForCanEdit = "";
@@ -134,9 +139,22 @@
         return accessMapping.Owner == userId || accessMapping.CanChangeAccess.Contains(userId);
     }
 
-    private void RemoveFromCanChangeForChosenUser(string userToRemove)
+    private void AddNewResourceToManage()
     {
-        _chosenUserAccessMapping?.CanChange.Remove(userToRemove);
+        if (string.IsNullOrWhiteSpace(_enteredNewResourceIdentifier)) return;
+        var userId = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value ?? "Failed to get user ID";
+        var createdAccessMapping = new ApiParamUserAccessMapping
+        {
+            Owner = userId,
+            BlobName = _enteredNewResourceIdentifier,
+            CanChangeAccess = new List<string>(),
+            CanRetrieve = new List<string>(),
+            CanChange = new List<string>(),
+            CanDelete = new List<string>()
+        };
+        _userAccessMappings.Add(createdAccessMapping);
+        _enteredNewResourceIdentifier = "";
+        // _chosenUserAccessMapping = createdAccessMapping;
     }
 
     private void InitSampleData()
