@@ -29,6 +29,7 @@ services:
 
       # App Config
       FILESHARE_WEB_REMOTE_FILE_API_ADDRESS: "http://fileshare_rest:8080"
+      FILESHARE_WEB_USERS_DOMAIN: "hello.stavanger"
 
       # Auth config
       OIDC_IDP_ADDRESS_FOR_SERVER: "http://keycloak:8088/realms/demo-realm"

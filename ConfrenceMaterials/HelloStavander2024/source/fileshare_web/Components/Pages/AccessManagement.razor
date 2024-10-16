@@ -54,19 +54,19 @@
                     @if (UserCanEditAccessMapping(_chosenUserAccessMapping))
                     {
                         <tr>
-                            <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanChangeAccess"></td>
+                            <td><input id="uam-add-user-change-access" class="form-control" type="text" placeholder="@_exampleAddress" @bind="_enteredNewUserForCanChangeAccess"></td>
                             <td><button class="btn btn-outline-primary" @onclick="() => {
                                 if(_enteredNewUserForCanChangeAccess?.Length > 2){ _chosenUserAccessMapping.CanChangeAccess.Add(_enteredNewUserForCanChangeAccess); _enteredNewUserForCanChangeAccess = default;} }">Add</button></td>
 
-                            <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanRetrieve"></td>
+                            <td><input id="uam-add-user-retrieve" class="form-control" type="text" placeholder="@_exampleAddress" @bind="_enteredNewUserForCanRetrieve"></td>
                             <td><button class="btn btn-outline-primary" @onclick="() => {
                                 if(_enteredNewUserForCanRetrieve?.Length > 2){ _chosenUserAccessMapping.CanRetrieve.Add(_enteredNewUserForCanRetrieve); _enteredNewUserForCanRetrieve = default;} }">Add</button></td>
 
-                            <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanEdit"></td>
+                            <td><input id="uam-add-user-edit" class="form-control" type="text" placeholder="@_exampleAddress" @bind="_enteredNewUserForCanEdit"></td>
                             <td><button class="btn btn-outline-primary "@onclick="() => {
                                 if(_enteredNewUserForCanEdit?.Length > 2){ _chosenUserAccessMapping.CanChange.Add(_enteredNewUserForCanEdit); _enteredNewUserForCanEdit = default;} }">Add</button></td>
 
-                            <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="someone@example.com" @bind="_enteredNewUserForCanDelete"></td>
+                            <td><input id="uam-add-user-delete" class="form-control" type="text" placeholder="@_exampleAddress" @bind="_enteredNewUserForCanDelete"></td>
                             <td><button class="btn btn-outline-primary" @onclick="() => {
                                 if(_enteredNewUserForCanDelete?.Length > 2){ _chosenUserAccessMapping.CanDelete.Add(_enteredNewUserForCanDelete); _enteredNewUserForCanDelete = default;} }">Add</button></td>
 
@@ -129,11 +129,16 @@
     private string? _enteredNewUserForCanRetrieve = "";
     private string? _enteredNewUserForCanEdit = "";
     private string? _enteredNewUserForCanDelete = "";
+    private string? _usersDomain = "";
+    private string? _exampleAddress = "";
 
     protected override async Task OnInitializedAsync()
     {
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
         _userAccessMappings  = await KafkaUserAccessManagementApiService.GetUserAccessMappings(accessToken);
+        var usersDomain = Environment.GetEnvironmentVariable("FILESHARE_WEB_USERS_DOMAIN") ?? "example.com";
+        _usersDomain = usersDomain;
+        _exampleAddress = $"❤️@{usersDomain}";
         // InitSampleData();
         await base.OnInitializedAsync();
     }
@@ -236,10 +241,10 @@
         {
             BlobName = "Example resource ID 1",
             Owner = userId,
-            CanChangeAccess = ["a@example.com", "b@example.com", "c@example.com"],
-            CanChange = ["a@example.com", "b@example.com", "c@example.com", "d@example.com"],
-            CanRetrieve = ["a@example.com", "b@example.com"],
-            CanDelete = ["a@example.com"]
+            CanChangeAccess = [$"a@{_usersDomain}", $"b@{_usersDomain}", $"c@{_usersDomain}"],
+            CanChange = [$"a@{_usersDomain}", $"b@{_usersDomain}", $"c@{_usersDomain}", $"d@{_usersDomain}"],
+            CanRetrieve = [$"a@{_usersDomain}", $"b@{_usersDomain}"],
+            CanDelete = [$"a@{_usersDomain}"]
         });
         _userAccessMappings.Add(new ApiParamUserAccessMapping
         {
@@ -247,7 +252,7 @@
             Owner = userId,
             CanChangeAccess = [],
             CanChange = [],
-            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanRetrieve = [$"a@{_usersDomain}", $"b@{_usersDomain}"],
             CanDelete = []
         });
         _userAccessMappings.Add(new ApiParamUserAccessMapping
@@ -256,26 +261,26 @@
             Owner = userId,
             CanChangeAccess = [],
             CanChange = [],
-            CanRetrieve = ["a@example.com", "b@example.com"],
+            CanRetrieve = [$"a@{_usersDomain}", $"b@{_usersDomain}"],
             CanDelete = []
         });
         _userAccessMappings.Add(new ApiParamUserAccessMapping
         {
             BlobName = "Example resource ID 2",
-            Owner = "a@example.com",
-            CanChangeAccess = ["a@example.com", userId, "b@example.com", "c@example.com"],
-            CanChange = ["a@example.com", "b@example.com", "c@example.com", "d@example.com"],
-            CanRetrieve = ["a@example.com", "b@example.com"],
-            CanDelete = ["a@example.com"]
+            Owner = $"a@{_usersDomain}",
+            CanChangeAccess = [$"a@{_usersDomain}", userId, $"b@{_usersDomain}", $"c@{_usersDomain}"],
+            CanChange = [$"a@{_usersDomain}", $"b@{_usersDomain}", $"c@{_usersDomain}", $"d@{_usersDomain}"],
+            CanRetrieve = [$"a@{_usersDomain}", $"b@{_usersDomain}"],
+            CanDelete = [$"a@{_usersDomain}"]
         });
         _userAccessMappings.Add(new ApiParamUserAccessMapping
         {
             BlobName = "Example resource ID 1",
-            Owner = "b@example.com",
-            CanChangeAccess = ["a@example.com", userId, "b@example.com", "c@example.com"],
-            CanChange = ["a@example.com", "b@example.com", "c@example.com", "d@example.com"],
-            CanRetrieve = ["a@example.com", "b@example.com"],
-            CanDelete = ["a@example.com"]
+            Owner = $"b@{_usersDomain}",
+            CanChangeAccess = [$"a@{_usersDomain}", userId, $"b@{_usersDomain}", $"c@{_usersDomain}"],
+            CanChange = [$"a@{_usersDomain}", $"b@{_usersDomain}", $"c@{_usersDomain}", $"d@{_usersDomain}"],
+            CanRetrieve = [$"a@{_usersDomain}", $"b@{_usersDomain}"],
+            CanDelete = [$"a@{_usersDomain}"]
         });
     }
 }
