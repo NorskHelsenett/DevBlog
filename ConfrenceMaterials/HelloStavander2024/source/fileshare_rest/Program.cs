@@ -422,7 +422,7 @@ app.MapPost("/updateUserAccessMapping", async (ApiParamUserAccessMapping apiPara
         app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to set access configs for object that doesn't belong to them nor exists yet. This may indicate that they're trying to highjack a future resource belonging to someone else. The permissions they tried to set were {updatedUserAccessMapping}. Noping out");
         return Results.StatusCode(statusCode: StatusCodes.Status403Forbidden);
     }
-    if (accessMappingAlreadyExists && preExistingAccessMapping != null && (preExistingAccessMapping.Owner != userEmailClaim || preExistingAccessMapping.CanChangeAccess.Contains(userEmailClaim)))
+    if (accessMappingAlreadyExists && preExistingAccessMapping != null && preExistingAccessMapping.Owner != userEmailClaim && !preExistingAccessMapping.CanChangeAccess.Contains(userEmailClaim))
     {
         app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to set access configs for object that they neither own nor have access to change access rights for. This may indicate that they're trying to highjack a current belonging to someone else. The permissions they tried to set were {updatedUserAccessMapping}. Noping out");
         return Results.StatusCode(statusCode: StatusCodes.Status403Forbidden);
