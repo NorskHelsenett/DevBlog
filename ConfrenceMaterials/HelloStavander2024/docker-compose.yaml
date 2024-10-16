@@ -854,6 +854,7 @@ services:
         CUSTOM_CLIENT_NAME=demo-client
         CUSTOM_ROLE_NAME=demo-role
         DEMO_PASSWORD=password
+        USERS_EMAIL_DOMAIN='stavanger.no'
 
         function CreateUserInRealm {
           while [ $$# -gt 0 ]; do
@@ -883,7 +884,7 @@ services:
             --set username=$$SUPPLIED_USER_NAME \
             --set enabled=true \
             --set emailVerified=true \
-            --set "email=$${SUPPLIED_USER_NAME}@example.com" \
+            --set "email=$${SUPPLIED_USER_NAME}@$${USERS_EMAIL_DOMAIN}" \
             --set "firstName=$${SUPPLIED_USER_NAME}_FN" \
             --set "lastName=$${SUPPLIED_USER_NAME}_LN" \
             --output
@@ -943,6 +944,8 @@ services:
         CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "demo-admin" --password $$DEMO_PASSWORD
         CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "user" --password $$DEMO_PASSWORD
         CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "admin" --password $$DEMO_PASSWORD
+        CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "simon" --password $$DEMO_PASSWORD
+        CreateUserInRealm --realm $$CUSTOM_REALM_NAME --username "fredrik" --password $$DEMO_PASSWORD
 
         echo "==> Assigning roles to demo users"
 
