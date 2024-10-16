@@ -33,13 +33,25 @@
                     <td>@file.Name</td>
                     <td>@file.Rights</td>
                     <td><button class="btn btn-primary" hidden="@file.Delete" @onclick="()=>DeleteFile(file.Name)">Delete</button></td>
-                    <td><button class="btn btn-primary" hidden="@file.Download">Download</button></td>
+                    <td><button class="btn btn-primary" hidden="@file.Download" @onclick="()=>DownloadFile(file.Name,file.OwnerName)">Download</button></td>
                 </tr>
             }
         </tbody>
     </table>
 </div>
-
+<script>
+  window.downloadFileFromStream = async (fileName, contentStreamReference) => {
+    const arrayBuffer = await contentStreamReference.arrayBuffer();
+    const blob = new Blob([arrayBuffer]);
+    const url = URL.createObjectURL(blob);
+    const anchorElement = document.createElement('a');
+    anchorElement.href = url;
+    anchorElement.download = fileName ?? '';
+    anchorElement.click();
+    anchorElement.remove();
+    URL.revokeObjectURL(url);
+  }
+</script>
 @code {
     private List<SecretFile> _files = new();
 
@@ -50,6 +62,17 @@
     private async Task DeleteFile(string fileName){
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
         var filesaveResponse = await KafkaFileApiService.DeleteFile(accessToken, fileName);
+
+    }
+    private async Task DownloadFile(string fileName, string ownerName)
+    {
+        var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
+        var fileStream = await KafkaFileApiService.RetrievFile(accessToken, fileName, ownerName);
+
+        using var streamRef = new DotNetStreamReference(stream: fileStream);
+
+        await Js.InvokeVoidAsync("downloadFileFromStream", fileName, streamRef);
+
 
     }
     private async Task AddFile(InputFileChangeEventArgs e)
@@ -99,6 +122,7 @@
     private SecretFile MappToDTO(ApiParamUserAccessMapping thingToMapp){
         return new SecretFile{
             Name = thingToMapp.BlobName,
+            OwnerName = thingToMapp.Owner,
             Rights = GetRights(thingToMapp)
         };
     }
