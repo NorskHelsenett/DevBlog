@@ -1,10 +1,12 @@
 @page "/filelist"
 @using Microsoft.AspNetCore.Authentication
+@using System.Security.Claims
 @inject IJSRuntime Js;
 @inject ILogger<FileList> Logger;
 @inject IHttpContextAccessor HttpContextAccessor;
 @inject KafkaFileApiService KafkaFileApiService;
 @inject ToastService ToastService
+@inject KafkaUserAccessManagementApiService KafkaUserAccessManagementApiService;
 
 <PageTitle>File List</PageTitle>
 
@@ -90,8 +92,25 @@
     {
 
         var accessToken = HttpContextAccessor.HttpContext?.GetTokenAsync("access_token").Result ?? "";
-        var fileListFromApi = await KafkaFileApiService.GetListOfFiles(accessToken);
-        _files = fileListFromApi;
+        var fileListFromApi = await KafkaUserAccessManagementApiService.GetUserAccessMappings(accessToken);
+        _files = fileListFromApi.Select(MappToDTO).ToList();
         StateHasChanged();
+    }
+    private SecretFile MappToDTO(ApiParamUserAccessMapping thingToMapp){
+        return new SecretFile{
+            Name = thingToMapp.BlobName,
+            Rights = GetRights(thingToMapp)
+        };
+    }
+    private FileRights GetRights(ApiParamUserAccessMapping thingToMapp)
+    {
+        var myName = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
+        var rights = FileRights.NotSet;
+        
+        if(string.Equals(thingToMapp.Owner,myName)) rights = FileRights.Owner | rights;
+        if(thingToMapp.CanRetrieve.Contains(myName)) rights = FileRights.Shared | rights;
+
+        return rights;
+
     }
 }
