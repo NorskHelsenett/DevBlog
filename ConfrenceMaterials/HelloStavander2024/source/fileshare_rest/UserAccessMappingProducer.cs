@@ -12,7 +12,7 @@ public class UserAccessMappingProducer
     public UserAccessMappingProducer(ILogger<UserAccessMappingProducer> logger)
     {
         _logger = logger;
-        _topic = Environment.GetEnvironmentVariable(BIG_PAYLOADS_USER_ACCESS_MAPPING_TOPIC);
+        _topic = Environment.GetEnvironmentVariable(BIG_PAYLOADS_USER_ACCESS_MAPPING_TOPIC) ?? throw new Exception($"Environment variable {BIG_PAYLOADS_USER_ACCESS_MAPPING_TOPIC} has to be set");
         _producer = GetUserAccessMappingProducer();
     }
 

@@ -130,6 +130,7 @@
     {
         var myName = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
         var rights = FileRights.NotSet;
+        if (string.IsNullOrWhiteSpace(myName)) return rights;
 
         if(string.Equals(thingToMapp.Owner,myName)) rights = FileRights.Owner | rights;
         if(thingToMapp.CanRetrieve.Contains(myName)) rights = FileRights.Shared | rights;
