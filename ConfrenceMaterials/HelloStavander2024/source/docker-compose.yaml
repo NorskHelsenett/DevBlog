@@ -65,6 +65,7 @@ services:
       BIG_PAYLOADS_CHUNKS_TOPIC: "workshop-big-payloads-chunks"
       BIG_PAYLOADS_METADATA_TOPIC: "workshop-big-payloads-metadata"
       BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES: "256"
+      # BIG_PAYLOADS_CHUNK_PAYLOAD_SIZE_BYTES: "900000"
       BIG_PAYLOADS_USER_ACCESS_MAPPING_TOPIC: "workshop-big-payloads-user-access-mapping"
 
       # Auth config
