@@ -11,7 +11,7 @@ public class KafkaFileApiService(HttpClient httpClient, ILogger<KafkaFileApiServ
         var address = $"{Environment.GetEnvironmentVariable("FILESHARE_WEB_REMOTE_FILE_API_ADDRESS")}/retrieve";
         var request = new HttpRequestMessage(HttpMethod.Get, new Uri(address));
         request.Headers.Add("X-Blob-Name", fileName);
-        request.Headers.Add("X-Owner-id", owner);
+        request.Headers.Add("X-Owner-Id", owner);
         request.Headers.Add("Authorization", $"Bearer {accessToken}");
         try
         {
