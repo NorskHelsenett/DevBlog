@@ -85,7 +85,7 @@
         ToastService.ShowToast(
             message: "Upload started",
             level: ToastLevel.Info,
-            duration: TimeSpan.FromSeconds(1)
+            duration: TimeSpan.FromSeconds(3)
         );
         var filesaveResponse = await KafkaFileApiService.SaveFile(accessToken, stream, e.File.Name);
         if (filesaveResponse)
@@ -130,7 +130,7 @@
     {
         var myName = HttpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email)?.Value;
         var rights = FileRights.NotSet;
-        
+
         if(string.Equals(thingToMapp.Owner,myName)) rights = FileRights.Owner | rights;
         if(thingToMapp.CanRetrieve.Contains(myName)) rights = FileRights.Shared | rights;
 

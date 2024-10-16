@@ -142,7 +142,7 @@ app.MapPost("/store", async (HttpRequest req, Stream body, ChunkingProducer chun
 })
 .RequireAuthorization();
 
-app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStateService stateService) =>
+app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStateService stateService, UserAccessMappingStateService userAccessMappingStateService) =>
 {
     var correlationId = System.Guid.NewGuid().ToString("D");
     if(context.Request.Headers.TryGetValue("X-Correlation-Id", out Microsoft.Extensions.Primitives.StringValues headerCorrelationId))
@@ -169,11 +169,38 @@ app.MapGet("/retrieve", (HttpContext context, ChunkConsumer consumer, OutputStat
             suppliedBlobName = headerSuppliedBlobName.ToString();
         }
     }
+
+    var suppliedOwnerId = userEmailClaim;
+    if(context.Request.Headers.TryGetValue("X-Owner-Id", out Microsoft.Extensions.Primitives.StringValues headerSuppliedOwnerId))
+    {
+        if(!string.IsNullOrWhiteSpace(headerSuppliedOwnerId.ToString()))
+        {
+            suppliedOwnerId = headerSuppliedOwnerId.ToString();
+        }
+    }
+
     var cancellationToken = context.Request.HttpContext.RequestAborted;
 
-    var internalBlobId = GetBlobId(nameOfOwner: userEmailClaim, suppliedBlobName: suppliedBlobName);
+    var internalBlobId = GetBlobId(nameOfOwner: suppliedOwnerId, suppliedBlobName: suppliedBlobName);
 
     app.Logger.LogInformation($"CorrelationId {correlationId} Received request from \"{userEmailClaim}\" for blob they named \"{suppliedBlobName}\" with internal blob ID \"{internalBlobId}\"");
+
+    // Check permissions
+    if (suppliedOwnerId != userEmailClaim)
+    {
+        if (!userAccessMappingStateService.TryGetUserAccessMapping(internalBlobId,
+                out UserAccessMapping? userAccessMapping))
+        {
+            app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to retireve file {suppliedBlobName} belonging to {suppliedOwnerId}, but no sharing has been set up");
+            return Task.FromResult(Results.StatusCode(StatusCodes.Status401Unauthorized));
+        }
+
+        if (userAccessMapping?.CanRetrieve.Contains(userEmailClaim) != true)
+        {
+            app.Logger.LogWarning($"CorrelationId {correlationId} user {userEmailClaim} tried to retireve file {suppliedBlobName} belonging to {suppliedOwnerId}, but user is not in list of people allowed to retrieve");
+            return Task.FromResult(Results.StatusCode(StatusCodes.Status401Unauthorized));
+        }
+    }
 
     context.Response.Headers.Append("X-Correlation-Id", correlationId);
 
