@@ -854,7 +854,7 @@ services:
         CUSTOM_CLIENT_NAME=demo-client
         CUSTOM_ROLE_NAME=demo-role
         DEMO_PASSWORD=password
-        USERS_EMAIL_DOMAIN='stavanger.no'
+        USERS_EMAIL_DOMAIN='hello.stavanger'
 
         function CreateUserInRealm {
           while [ $$# -gt 0 ]; do
