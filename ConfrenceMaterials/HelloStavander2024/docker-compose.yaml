@@ -885,8 +885,8 @@ services:
             --set enabled=true \
             --set emailVerified=true \
             --set "email=$${SUPPLIED_USER_NAME}@$${USERS_EMAIL_DOMAIN}" \
-            --set "firstName=$${SUPPLIED_USER_NAME}_FN" \
-            --set "lastName=$${SUPPLIED_USER_NAME}_LN" \
+            --set "firstName=$${SUPPLIED_USER_NAME}Given" \
+            --set "lastName=$${SUPPLIED_USER_NAME}Family" \
             --output
           echo "==> Setting password for demo admin in demo realm"
           /opt/keycloak/bin/kcadm.sh set-password \

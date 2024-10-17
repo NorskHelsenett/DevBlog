@@ -6,6 +6,11 @@ using KafkaBlobChunking;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateSlimBuilder(args);
+builder.WebHost.ConfigureKestrel(serverOptions =>
+{
+    serverOptions.Limits.MaxRequestBodySize = 100_000_000_000;
+});
+
 
 builder.Services.AddSingleton<ChunkingProducer>();
 builder.Services.AddScoped<ChunkConsumer>();
