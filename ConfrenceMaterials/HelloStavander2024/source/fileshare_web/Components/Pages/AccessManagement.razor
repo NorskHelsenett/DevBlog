@@ -24,7 +24,8 @@
             <tbody>
             @foreach (var uam in _userAccessMappings)
             {
-                <tr @onclick="() => _chosenUserAccessMapping = uam">
+                // Accessibility for the clickable row: set role="button" so screen-readers/vimium can find it; set tabindex="0" so you can tab to it, set @onkeydown so that something happens when you press enter/space while it's focused
+                <tr @onclick="() => _chosenUserAccessMapping = uam" @onkeydown='(e) => { if(e.Key == "Enter" || e.Key == " " || e.Key == "Spacebar") { _chosenUserAccessMapping = uam; } }' role="button" tabindex="0">
                     <td>@uam.Owner</td>
                     <td>@uam.BlobName</td>
                 </tr>
