@@ -21,6 +21,7 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_DETAILEDERRORS: "true"
 
       # LOGGING__LOGLEVEL__DEFAULT: "Information"
       LOGGING__LOGLEVEL__DEFAULT: "Trace"
