@@ -97,7 +97,7 @@ binary -> decimal
   1000 ->  4
 ```
 
-To get a Zigzag encoded value for a number wikipedia gives the pseudocode `(n << 1) ^ (n >> k - 1)` where `n` is the number to encode and `k` is the number of bits you want. Which for a 32 bit integer in dotnet becomes `(uintNumber << 1) ^ (uintNumber >> 31)` to encode. Inversely then, decoding would be done like this `(n >> 1) ^ -(n & 1)`, which if constrained to int in dotnet becomes `(int)((encodedByteValueAsUint >> 1) ^ -(encodedByteValueAsUint & 1))` .
+To get a Zigzag encoded value for a number wikipedia gives the pseudocode `(n << 1) ^ (n >> k - 1)` where `n` is the number to encode and `k` is the number of bits you want. Which for a 32 bit integer in dotnet becomes `(number << 1) ^ (number >> 31)` to encode. Inversely then, decoding would be done like this `(n >> 1) ^ -(n & 1)`, which if constrained to int in dotnet becomes `(encodedNumber >> 1) ^ -(encodedNumber & 1)` .
 
 ## Variable length number encoding
 
@@ -110,9 +110,6 @@ A basic, probably not performance optimal solution (I haven't tested it though, 
 ```cs
 IEnumerable<byte> VarIntEncode(int value)
 {
-    if (value < 0)
-        throw new ArgumentOutOfRangeException("value", value, "value must be 0 or greater");
-
     do
     {
         byte lower7bits = (byte)(value & 0x7f);
@@ -220,8 +217,38 @@ Here, we hit a special case. Because most protos will contain 1 message definiti
 
 And that's pretty much it; Should someone now ask you to add the bytes indicating the protobuf message type to your Kafka payloads you'll know what to do!
 
-# Endnote: How to find the message index programmatically
+# How to find the protobuf proto message index programmatically
 
 I though of leaving this bit as an exercise for the reader, or another post, seeing as this has already become somewhat long. However, given that the note I want to end on is "now you know what to do should you start from scratch", it is important to actually say something about how to obtain the protobuf message type indexes without relying on counting them out by hand and introducing extra config code (though it probably would be fewer lines).
 
-ToDo
+The way to go about this in dotnet, if you have a dotnet type generated using protoc, you can pass it to a function that takes a `Google.Protobuf.IMessage` or simply cast it to one. Once you have a protobuf `IMessage`, you should be able to access the `Descriptor` property of the interface. At this point you have obtained a `Google.Protobuf.Reflection.MessageDescriptor`, the parent message type in the `ContainingType` property if we're not at the root and it is `null`, and child message types (if any) in the `NestedTypes` IList.
+
+All you need from there, is to know that the `Descriptor` also has a property called `File` of the `Google.Protobuf.Reflection.FileDescriptor` type, where you can access the list of proto message type types that live on the root level in the `MessageTypes` property. The lists are in the indexed order we need for the Kafka schema protobuf magic bytes, so we can use those.
+
+The only thing to be careful about, is that you probably will want to start with the type you're sending, and traverse your way up the tree of nested messages from there. Which in practice will land you with a list of indexes in the reverse order of what we actually need. So remember to reverse them before you run off to start using them.
+
+If you prefer the compactness of code to dense explanations like the one above, here is an example shown below:
+
+```cs
+int[] ProtoIndexes(IMessage kafkaProtobufPayload)
+{
+    var currentDescription = kafkaProtobufPayload.Descriptor;
+    List<int> indexes = [];
+    while(currentDescription.ContainingType != null)
+    {
+        var previousDescription = currentDescription;
+        currentDescription = previousDescription.ContainingType;
+        var previousIndex = currentDescription.NestedTypes.IndexOf(previousDescription);
+        indexes.Add(previousIndex);
+    }
+    var rootDescriptionIndex = currentDescription.File.MessageTypes.IndexOf(currentDescription);
+    indexes.Add(rootDescriptionIndex);
+    indexes.Reverse();
+    return indexes.ToArray();
+}
+// Usage example with the very nested example types from above:
+var protoDeserialized = new mx_2.Types.mx_2_0.Types.mx_2_0_1 { FirstField = $"First value!" };
+var protoIndexes = ProtoIndexes(protoDeserialized);
+Console.WriteLine($"Proto indexes are {System.Text.Json.JsonSerializer.Serialize(protoIndexes)}");
+// Prints Proto indexes are: [2,0,1]
+```
