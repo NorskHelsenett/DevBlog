@@ -1,0 +1,7 @@
+syntax = "proto3";
+package no.nhn.example;
+option csharp_namespace = "";
+
+message ms {
+    string FirstField = 1;
+}

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package no.nhn.example;
+option csharp_namespace = "";
+
+message mf_0 {
+    string FirstField = 1;
+}
+message mf_1 {
+    string FirstField = 1;
+}
+message mf_2 {
+    mf_0 FirstField = 1;
+    mf_1 SecondField = 2;
+}

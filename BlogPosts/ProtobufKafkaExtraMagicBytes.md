@@ -112,11 +112,11 @@ IEnumerable<byte> VarIntEncode(int value)
 {
     do
     {
-        byte lower7bits = (byte)(value & 0x7f);
+        byte lower7Bits = (byte)(value & 0x7f);
         value >>= 7;
         if (value > 0)
-            lower7bits |= 128;
-        yield return lower7bits;
+            lower7Bits |= 128;
+        yield return lower7Bits;
     } while (value > 0);
 }
 ```
@@ -129,13 +129,13 @@ int VarIntDecode(IEnumerable<byte> encoded)
     bool more = true;
     int value = 0;
     int shift = 0;
-    using(var iter = encoded.GetEnumerator())
+    using(var iter = encoded.GetEnumerator());
     while(more)
     {
         iter.MoveNext();
-        byte lower7bits = iter.Current;
-        more = (lower7bits & 128) != 0;
-        value |= (lower7bits & 0x7f) << shift;
+        byte lower7Bits = iter.Current;
+        more = (lower7Bits & 128) != 0;
+        value |= (lower7Bits & 0x7f) << shift;
         shift += 7;
     }
     return value;
@@ -230,7 +230,7 @@ The only thing to be careful about, is that you probably will want to start with
 If you prefer the compactness of code to dense explanations like the one above, here is an example shown below:
 
 ```cs
-int[] ProtoIndexes(IMessage kafkaProtobufPayload)
+List<int> ProtoIndexes(IMessage kafkaProtobufPayload)
 {
     var currentDescription = kafkaProtobufPayload.Descriptor;
     List<int> indexes = [];
@@ -244,7 +244,7 @@ int[] ProtoIndexes(IMessage kafkaProtobufPayload)
     var rootDescriptionIndex = currentDescription.File.MessageTypes.IndexOf(currentDescription);
     indexes.Add(rootDescriptionIndex);
     indexes.Reverse();
-    return indexes.ToArray();
+    return indexes;
 }
 // Usage example with the very nested example types from above:
 var protoDeserialized = new mx_2.Types.mx_2_0.Types.mx_2_0_1 { FirstField = $"First value!" };
