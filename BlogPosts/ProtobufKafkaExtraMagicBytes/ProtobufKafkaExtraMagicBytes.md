@@ -7,6 +7,9 @@ Once we got to know this, we had several questions, like; Why these extra bytes?
 
 [Img: rabbit(hole); Confused rabbit?]
 
+If your preferred language is code, you can check out a working example of how it all fits together here:
+https://github.com/NorskHelsenett/DevBlog/tree/main/BlogPosts/ProtobufKafkaExtraMagicBytes
+
 # Background
 
 ## Kafka magic bytes
@@ -252,3 +255,6 @@ var protoIndexes = ProtoIndexes(protoDeserialized);
 Console.WriteLine($"Proto indexes are {System.Text.Json.JsonSerializer.Serialize(protoIndexes)}");
 // Prints Proto indexes are: [2,0,1]
 ```
+
+You can check out a full example of how all of this fits together here:
+https://github.com/NorskHelsenett/DevBlog/tree/main/BlogPosts/ProtobufKafkaExtraMagicBytes
