@@ -5,10 +5,11 @@ This all started with a rendering bug. We tried to send a [Protobuf](https://pro
 
 Once we got to know this, we had several questions, like; Why these extra bytes? And can we simply insert them ourselves? This article aims to gently take us to the bottom of the rabbit hole, because I needed to sort out my thoughts, and be able to explain and talk to others about how surrounding issues arise and what can or should be done about them.
 
-[Img: rabbit(hole); Confused rabbit?]
+[Img: rabbit(hole); Confused rabbit? Anything to appease the editors need for imagery]
 
 If your preferred language is code, you can check out a working example of how it all fits together here:
 https://github.com/NorskHelsenett/DevBlog/tree/main/BlogPosts/ProtobufKafkaExtraMagicBytes
+But then again, if you're here, you probably also want an explanation of what's going on and why. If you only need to get things done, using Confluents serdes libraries for protobuf ([java](https://github.com/confluentinc/schema-registry/tree/master/protobuf-serde) [dotnet](https://github.com/confluentinc/confluent-kafka-dotnet/tree/master/src/Confluent.SchemaRegistry.Serdes.Protobuf)), will probably save you a lot of time. And as they're Apache 2.0 licensed, so basically risk free to use. Again, the focus here is if you need to understand what's going on. So let's get started!
 
 # Background
 
@@ -145,6 +146,8 @@ int VarIntDecode(IEnumerable<byte> encoded)
 }
 ```
 
+A small thing to beware when decoding is that you might wan't to remove/consume the bytes as they are read, so that you don't have to keep track of where the current entry starts and ends. In dotnet you can easily achieve this by using byte arrays for you underlying data structure. Then you can get a `Stream` from your byte array by doing `Stream consumableStream = new System.IO.MemoryStream(yourByteArray);`. Which in turn allows you to call the built in `int nextByte = consumableStream.ReadByte()` to retrieve the content and move the referenced stream ahead.
+
 Seeing as the solutions fit in between 10 and 20 lines of code, and are easily convertible to using other types for input and output like uints and streams, you probably want to just copy in the code you end up using to a utility class rather than adding to your supply chain, but figuring out what's best is up to you.
 
 # How Prtobuf magic bytes are actually determined
@@ -222,7 +225,7 @@ And that's pretty much it; Should someone now ask you to add the bytes indicatin
 
 # How to find the protobuf proto message index programmatically
 
-I though of leaving this bit as an exercise for the reader, or another post, seeing as this has already become somewhat long. However, given that the note I want to end on is "now you know what to do should you start from scratch", it is important to actually say something about how to obtain the protobuf message type indexes without relying on counting them out by hand and introducing extra config code (though it probably would be fewer lines).
+I though of leaving this bit as an exercise for the reader, or another post, seeing as this has already become somewhat long. However, given that the note I want to end on is "now you know what's going on all the way down", it is important to actually say something about how to obtain the protobuf message type indexes without relying on counting them out by hand and introducing extra config code (though it probably would be fewer lines).
 
 The way to go about this in dotnet, if you have a dotnet type generated using protoc, you can pass it to a function that takes a `Google.Protobuf.IMessage` or simply cast it to one. Once you have a protobuf `IMessage`, you should be able to access the `Descriptor` property of the interface. At this point you have obtained a `Google.Protobuf.Reflection.MessageDescriptor`, the parent message type in the `ContainingType` property if we're not at the root and it is `null`, and child message types (if any) in the `NestedTypes` IList.
 
@@ -256,5 +259,9 @@ Console.WriteLine($"Proto indexes are {System.Text.Json.JsonSerializer.Serialize
 // Prints Proto indexes are: [2,0,1]
 ```
 
+And that's pretty much it! Hopefully, you now have a decent grasp of what's going on, and what these extra bytes that magically appear before protobuf messages on Kafka actually are.
+
 You can check out a full example of how all of this fits together here:
 https://github.com/NorskHelsenett/DevBlog/tree/main/BlogPosts/ProtobufKafkaExtraMagicBytes
+
+[Share and enjoy!](https://en.wikipedia.org/wiki/Phrases_from_The_Hitchhiker%27s_Guide_to_the_Galaxy#Share_and_Enjoy)
