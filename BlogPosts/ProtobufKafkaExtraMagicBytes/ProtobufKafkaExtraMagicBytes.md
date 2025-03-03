@@ -89,16 +89,16 @@ Which kind of makes sense, once you see how you're allowed to define a proto. Bu
 Now, before we go on, we need to understand [Zigzag encoding](https://en.wikipedia.org/wiki/Variable-length_quantity#Zigzag_encoding) for things to make sense. Very basically, it is a compact way to represent small signed integers in binary, whit some really nice properties if bit shift math is your ting because you need the performance. Basically it maps 0 (decimal) to 0 (binary), -1 (decimal) to 1 binary, 1 (decimal) to 10 binary, -2 (decimal) to 11 (binary), etc. A short illustration:
 
 ```
-binary -> decimal
-     0 ->  0
-     1 -> -1
-    10 ->  1
-    11 -> -2
-   100 ->  2
-   101 -> -3
-   110 ->  3
-   111 -> -4
-  1000 ->  4
+original decimal -> binary -> binary cast to int
+         0       ->    0   ->   0
+        -1       ->    1   ->   1
+         1       ->   10   ->   2
+        -2       ->   11   ->   3
+         2       ->  100   ->   4
+        -3       ->  101   ->   5
+         3       ->  110   ->   6
+        -4       ->  111   ->   7
+         4       -> 1000   ->   8
 ```
 
 To get a Zigzag encoded value for a number wikipedia gives the pseudocode `(n << 1) ^ (n >> k - 1)` where `n` is the number to encode and `k` is the number of bits you want. Which for a 32 bit integer in dotnet becomes `(number << 1) ^ (number >> 31)` to encode. Inversely then, decoding would be done like this `(n >> 1) ^ -(n & 1)`, which if constrained to int in dotnet becomes `(encodedNumber >> 1) ^ -(encodedNumber & 1)` .
