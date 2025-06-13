@@ -190,7 +190,7 @@ echo "==> Creating group mapper for demo client so that groups gets included in 
     --set "config.\"claim.name\"=groups" \
     --set "config.\"jsonType.label\"=string" \
     --output
-echo "==> Creating role mapper for demo client so that roles gets included in tokens"
+echo "==> Creating role mapper for demo client so that realm roles gets included in tokens"
 /opt/keycloak/bin/kcadm.sh create \
     clients/demo_client_id/protocol-mappers/models \
     --target-realm demo_realm_name \
@@ -204,9 +204,23 @@ echo "==> Creating role mapper for demo client so that roles gets included in to
     --set "config.\"claim.name\"=roles" \
     --set "config.\"jsonType.label\"=string" \
     --output
+echo "==> Creating role mapper for demo client so that client roles gets included in tokens"
+/opt/keycloak/bin/kcadm.sh create \
+    clients/demo_client_id/protocol-mappers/models \
+    --target-realm demo_realm_name \
+    --set "name=roles" \
+    --set "protocol=openid-connect" \
+    --set "protocolMapper=oidc-usermodel-client-role-mapper" \
+    --set "config.\"introspection.token.claim\"=true" \
+    --set "config.\"multivalued\"=true" \
+    --set "config.\"id.token.claim\"=true" \
+    --set "config.\"access.token.claim\"=true" \
+    --set "config.\"claim.name\"=roles" \
+    --set "config.\"jsonType.label\"=string" \
+    --output
 ```
 
-Which you now can veryfy by running:
+Which you now can verify by running:
 
 ```sh
 curl --request POST \
