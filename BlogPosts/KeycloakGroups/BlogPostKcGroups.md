@@ -230,7 +230,8 @@ curl --request POST \
     --data username=demo-user \
     --data password=password \
     --data realm=demo_realm_name \
-    --data grant_type=password
+    --data grant_type=password \
+    | jq -r ".access_token" | jq -R 'split(".") | .[0],.[1] | @base64d | fromjson'
 ```
 
 Share and enjoy!
