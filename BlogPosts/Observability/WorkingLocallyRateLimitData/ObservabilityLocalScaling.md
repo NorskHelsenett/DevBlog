@@ -102,7 +102,7 @@ Back to the drawing board
 - Figure out that you can try start with only reducing the most spammed spans.
 - Need to figure out what they are.
   - Come up with tempo [TraceQL](https://grafana.com/docs/tempo/latest/traceql/) query `{} | count_over_time() by (span:name)` to show how rate of different trace spans over time.
-    - ToDo: Picture of resulting histogram?
+    - ![Figure showing trace histogram before tail sampling](./2025-07-30_01_all-traces-by-name-before-tailsampling.png)
 - Start with the first that comes a lot first.
 - Find out that [OpenTelemetry Transformation Language (OTTL)](https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/pkg/ottl) is needed to match span names in the tail sampling processor policies.
 - Learn that the and policy is needed to combine the name matching condition and probabilistic sampling.
