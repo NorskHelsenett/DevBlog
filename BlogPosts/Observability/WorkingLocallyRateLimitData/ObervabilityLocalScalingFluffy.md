@@ -12,7 +12,7 @@ Thankfully [Grafana](https://grafana.com) has made a lightweight image that is s
 
 # Problem of the day
 
-The problem has it's roots in trying to match up two datasets of about 2 million entries. All in all not a huge amount of data, 3 to 4 gigabytes each. However, occasionally having to reprocess it, makes the points in the process taking 1 to 10 milliseconds a painful bottleneck when you can observe most things taking tens to hundreds of microseconds. Initially the telemetry has already proved invaluable in speeding up some of the most egregious offense, especially the tracing.
+The problem has its roots in trying to match up two datasets of about 2 million entries. All in all, not a huge amount of data, 3 to 4 gigabytes each. However, occasionally having to reprocess it, makes the points in the process taking 1 to 10 milliseconds a painful bottleneck when you can observe most things taking tens to hundreds of microseconds. Initially the telemetry has already proved invaluable in speeding up some of the most egregious offense, especially the tracing.
 
 The main part of our beings now with the pipeline growing longer, and [Tempo](https://grafana.com/oss/tempo/) basically [oom](https://en.wikipedia.org/wiki/Out_of_memory) killing the LGTM image observability stack. Which is highly annoying, because the traces are very useful at this stage. And it doesn't help that it takes Grafana down with it, along with the other creature comforts it provides.
 
@@ -20,9 +20,9 @@ At this point we could have ended the story early, by implementing [head samplin
 
 # Tail Sampling
 
-So what do we do? At the same place we learned about the existence of head sampling, we discover [tail sampling](https://opentelemetry.io/docs/concepts/sampling/#tail-sampling). Which should allow us to configure things locally so that while we generate the same amount of telemetry, thus not changing the codes behaviour and performance significantly, we don't neccessarily process all of the gathered data. Perfect!
+So what do we do? At the same place we learned about the existence of head sampling, we discover [tail sampling](https://opentelemetry.io/docs/concepts/sampling/#tail-sampling). Which should allow us to configure things locally so that while we generate the same amount of telemetry, thus not changing the codes behaviour and performance significantly, we don't necessarily process all of the gathered data. Perfect!
 
-This however means that we have to start tinkering with the [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) piece of the telemetry pipeline. And because the chill simplicity of the just spinning up the LGTM image goes bye-bye, we might as well set up things a bit more properly, with running separate images for the different components. This also has the added bonus of that if one of them dies, like say Tempo receives too many traces for the RAM allocated by Docker, the rest should still work!
+This however means that we must start tinkering with the [OpenTelemetry Collector](https://opentelemetry.io/docs/collector/) piece of the telemetry pipeline. And because the chill simplicity of the just spinning up the LGTM image goes bye-bye, we might as well set up things a bit more properly, with running separate images for the different components. This also has the added bonus of that if one of them dies, like say Tempo receives too many traces for the RAM allocated by Docker, the rest should still work!
 
 So, in practice this means that we'll have to spin up 5 images, and create the configs for them:
 
@@ -242,7 +242,7 @@ We need something else.
 
 # A new hope
 
-Now, in a proper state of despair, there is finally room for hope to be born. So we hopefully go back to the docs. Could there be something else we can try? The `composite` policy example which originally looked a bit off from what we were trying to achieve, starts to look interesting. After many attempts illustrated above, and searches for how to make tempo be more judicious in what data to keep when it get's swamped, the ways we could probably make the `composite_sub_policy` section work as we want it to starts becoming apparent. And the `max_total_spans_per_second` property, combined with the `rate_allocation` section, which has `percent` keys per entry, looks more or less like the perfect hammer for my nail.
+Now, in a proper state of despair, there is finally room for hope to be born. So we hopefully go back to the docs. Could there be something else we can try? The `composite` policy example which originally looked a bit off from what we were trying to achieve, starts to look interesting. After many attempts illustrated above, and searches for how to make tempo be more judicious in what data to keep when it gets swamped, the ways we could probably make the `composite_sub_policy` section work as we want it to, starts becoming apparent. And the `max_total_spans_per_second` property, combined with the `rate_allocation` section, which has `percent` keys per entry, looks like the perfect hammer for my nail.
 
 So, after waking up the creative bran cell from its slumber and copy-pasting the ottl conditions to the right places we get something interesting to try out:
 
@@ -284,11 +284,11 @@ So, after waking up the creative bran cell from its slumber and copy-pasting the
     ]
 ```
 
-Running this seems successfull at first glance. The amount of incoming spans get limited as expected. But where are the spans we've not explicitly rate limited? I mean, the code looks more or less like the one in the docs? The `always_sample` policy looks sus, so lets try exchanging it with a known quantity, like an ottl expression picking up all spans with names: `'name != ""'`. Certainly this should pick up everything.
+Running this seems successful at first glance. The number of incoming spans get limited as expected. But where are the spans we've not explicitly rate limited? I mean, the code looks more or less like the one in the docs? The `always_sample` policy looks sus, so let's try exchanging it with a known quantity, like an ottl expression picking up all spans with names: `'name != ""'`. Certainly this should pick up everything.
 
 Here we go again then!
 
-But no, still no sign off the rest. Ok, perhaps the docs are incomplete then? Lets try to see what happens we add a rate limit for the policy passing all of the rest of the spans. Something like `{ policy: composite-pass-rest, percent: 90 },` should do the trick.
+But no, still no sign off the rest. Ok, perhaps the docs are incomplete then? Let's try to see what happens we add a rate limit for the policy passing all of the rest of the spans. Something like `{ policy: composite-pass-rest, percent: 90 },` should do the trick.
 
 And it works!
 
@@ -300,7 +300,7 @@ Finally we're done!
 
 However, while we have a working solution, there are some concerns that are putting a damper on the excitement. Remembering to manually recalculate and adjust the rate the remaining unfiltered spans are sampled at when we need to rate limit something more kind of sucks.
 
-After some experimentation it turns out that that setting the pass rate to 100 percent works. Actually you can allocate 100% of all of the policies, and it still seems to work more or less the same. It is however a bit unclear how it works and how it's supposed to work. Are we guaranteed that all is passed along, but we get a higher multiple of the spans per second limit? Or will it like the rate limiting filer policy opaquely decide to just drop some spans? The docs don't say, and by now we've invested too much time to start studying the source code in depth. Best to just deal with the rate allocation by hand for now, while we wait for a loudness equalization equivalent.
+After some experimentation it turns out that that setting the pass rate to 100 percent works. Actually you can allocate 100% of all the policies, and it still seems to work about the same. It is however a bit unclear how it works and how it's supposed to work. Are we guaranteed that all is passed along, but we get a higher multiple of the spans per second limit? Or will it like the rate limiting filer policy opaquely decide to just drop some spans? The docs don't say, and by now we've invested too much time to start studying the source code in depth. Best to just deal with the rate allocation by hand for now, while we wait for a loudness equalization equivalent.
 
 Another significant limitation it's important to remain aware of is that this solution loses the information you would have gotten from the probabilistic sampling approach. Most importantly you miss all the information about relative volume of the spans over time, so for instance it will be harder to spot if a slowness occurs when the workload spikes in amount.
 
