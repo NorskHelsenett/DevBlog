@@ -1,8 +1,8 @@
-ToDo: Fluffify the text
-
-# Scaling when working with observability locally
+# Scaling Local Observability
 
 In this piece we'll look at how to deal with larger volumes of telemetry data locally, using the OpenTelemetry Collector to tackle the challenge.
+
+It is structured around what I tried and learned in the process, a fully working example can be found at the bottom of this article or here: https://github.com/NorskHelsenett/DevBlog/blob/main/BlogPosts/Observability/WorkingLocallyRateLimitData/ExampleDockerCompose.yaml
 
 # Background
 
@@ -242,7 +242,7 @@ We need something else.
 
 # A new hope
 
-Now, in a proper state of despair, there is finally room for hope to be born. So we hopefully go back to the docs. Could there be something else we can try? The `composite` policy example which originally looked a bit off from what we were trying to achieve, starts to look interesting. After many attempts illustrated above, and searches for how to make tempo be more judicious in what data to keep when it gets swamped, the ways we could probably make the `composite_sub_policy` section work as we want it to, starts becoming apparent. And the `max_total_spans_per_second` property, combined with the `rate_allocation` section, which has `percent` keys per entry, looks like the perfect hammer for my nail.
+What now? Our time and options seem to be exhausted. But there is a slight sliver of hope in that there could be something else in the tail sampling documentation, so we go back one more time. There we see the `composite` policy example, which originally looked a bit off from what we were trying to achieve, but now starts to look interesting. After many attempts illustrated above, and searches for how to make tempo be more judicious in what data to keep when it gets swamped, the ways we could probably make the `composite_sub_policy` section work as we want it to, starts becoming apparent. And the `max_total_spans_per_second` property, combined with the `rate_allocation` section, which has `percent` keys per entry, looks like the perfect hammer for my nail.
 
 So, after waking up the creative bran cell from its slumber and copy-pasting the ottl conditions to the right places we get something interesting to try out:
 
