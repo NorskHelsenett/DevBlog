@@ -1,0 +1,146 @@
+# These scrapeconfigs are added to fix an issue with kubelet scraping, see https://github.com/open-telemetry/opentelemetry-operator/issues/3277
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: kubelet-metrics
+spec:
+  authorization:
+    credentials:
+      key: token
+      name: cluster-collector
+  honorLabels: true
+  honorTimestamps: true
+  jobName: kubelet
+  kubernetesSDConfigs:
+    - followRedirects: true
+      role: Node
+      selectors:
+        - role: Node
+  metricsPath: /metrics
+  metricRelabelings:
+    - action: drop
+      regex: (csi_operations|storage_operation_duration)_seconds_bucket;(0.25|2.5|15|25|120|600)(\.0)?
+      sourceLabels:
+        - __name__
+        - le
+  relabelings:
+    - action: replace
+      sourceLabels:
+        - __metrics_path__
+      targetLabel: metrics_path
+  scheme: HTTPS
+  tlsConfig:
+    insecureSkipVerify: true
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: kubelet-cadvisor
+spec:
+  authorization:
+    credentials:
+      key: token
+      name: cluster-collector
+  honorLabels: true
+  honorTimestamps: true
+  jobName: kubelet
+  kubernetesSDConfigs:
+    - followRedirects: true
+      role: Node
+      selectors:
+        - role: Node
+  metricsPath: /metrics/cadvisor
+  metricRelabelings:
+    - action: drop
+      regex: container_cpu_(cfs_throttled_seconds_total|load_average_10s|system_seconds_total|user_seconds_total)
+      sourceLabels:
+        - __name__
+    - action: drop
+      regex: container_fs_(io_current|io_time_seconds_total|io_time_weighted_seconds_total|reads_merged_total|sector_reads_total|sector_writes_total|writes_merged_total)
+      sourceLabels:
+        - __name__
+    - action: drop
+      regex: container_memory_(mapped_file|swap)
+      sourceLabels:
+        - __name__
+    - action: drop
+      regex: container_(file_descriptors|tasks_state|threads_max)
+      sourceLabels:
+        - __name__
+    - action: drop
+      regex: container_memory_failures_total;hierarchy
+      sourceLabels:
+        - __name__
+        - scope
+    - action: drop
+      regex: container_network_.*;(cali|cilium|cni|lxc|nodelocaldns|tunl).*
+      sourceLabels:
+        - __name__
+        - interface
+    - action: drop
+      regex: container_spec.*
+      sourceLabels:
+        - __name__
+    - action: drop
+      regex: .+;
+      sourceLabels:
+        - id
+        - pod
+  relabelings:
+    - action: replace
+      sourceLabels:
+        - __metrics_path__
+      targetLabel: metrics_path
+  scheme: HTTPS
+  tlsConfig:
+    insecureSkipVerify: true
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: kubelet-probes
+spec:
+  authorization:
+    credentials:
+      key: token
+      name: cluster-collector
+  honorLabels: true
+  honorTimestamps: true
+  jobName: kubelet
+  kubernetesSDConfigs:
+    - followRedirects: true
+      role: Node
+      selectors:
+        - role: Node
+  metricsPath: /metrics/probes
+  relabelings:
+    - action: replace
+      sourceLabels:
+        - __metrics_path__
+      targetLabel: metrics_path
+  scheme: HTTPS
+  tlsConfig:
+    insecureSkipVerify: true
+---
+# This is added since we disable the servicemonitor for the prometheus operator
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: prometheus-operator
+spec:
+  authorization:
+    credentials:
+      key: token
+      name: cluster-collector
+  honorLabels: true
+  honorTimestamps: true
+  jobName: prometheus-kube-prometheus-operator
+  kubernetesSDConfigs:
+    - followRedirects: true
+      role: Service
+      selectors:
+        - role: Service
+          label: app=kube-prometheus-stack-operator
+  scheme: HTTPS
+  tlsConfig:
+    insecureSkipVerify: true

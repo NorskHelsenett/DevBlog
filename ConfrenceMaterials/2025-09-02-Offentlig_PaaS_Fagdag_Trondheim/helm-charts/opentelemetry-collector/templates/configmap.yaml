@@ -1,0 +1,159 @@
+{{- $_ := required "Environment is required" .Values.config.environment }}
+{{- if not ( or ( eq .Values.config.environment "test" ) ( eq .Values.config.environment "prod" ) ) }}
+{{- fail "invalid value for environment, must be either 'test' or 'prod'" }}
+{{- end }}
+{{- $_ := required "Location is required" .Values.config.location }}
+{{- if not ( or ( eq .Values.config.location "examplelocationfirst" ) ( eq .Values.config.location "examplelocationsecond" ) ) }}
+{{- fail "invalid value for location, must be either 'examplelocationfirst' or 'examplelocationsecond'" }}
+{{- end }}
+{{- $_ := required "Team is required" .Values.config.team }}
+{{- if not ( regexMatch "^team-[a-z]+(?:[-][a-z]+)*$" .Values.config.team ) }}
+{{- fail "invalid value for team, must be prefixed with 'team-' and can only contain lowercase letters eg 'team-example'" }}
+{{- end }}
+{{- $broker := "" }}
+{{- if ( eq .Values.config.environment "prod" ) }}
+{{- $broker = ( print .Values.config.location ".kafka.example.com:9094" ) }}
+{{- else }}
+{{- $broker = ( print .Values.config.location "-" .Values.config.environment ".kafka.example.com:9094" ) }}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ index .Values "opentelemetry-collector" "configMap" "existingName" }}
+  namespace: {{ template "opentelemetry-collector.namespace" . }}
+  labels:
+    {{- include "opentelemetry-collector.labels" . | nindent 4 }}
+data:
+  relay: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: ${env:MY_POD_IP}:4317
+          http:
+            endpoint: ${env:MY_POD_IP}:4318
+    processors:
+      batch:
+        send_batch_size: 1024
+        send_batch_max_size: 1024
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      {{- if .Values.addK8sAttributes }}
+      k8sattributes:
+      {{- end }}
+      {{- with .Values.filter }}
+      filter: {{ toYaml . | nindent 8 }}
+      {{- end }}
+    exporters:
+      kafka/logs:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ print "broker0-" $broker }}
+          - {{ print "broker1-" $broker }}
+          - {{ print "broker2-" $broker }}
+        protocol_version: 2.1.0
+        topic: {{ print "otel-" .Values.config.team "-logs" }}
+        producer:
+          required_acks: 0
+      kafka/metrics:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ print "broker0-" $broker }}
+          - {{ print "broker1-" $broker }}
+          - {{ print "broker2-" $broker }}
+        protocol_version: 2.1.0
+        topic: {{ print "otel-" .Values.config.team "-metrics" }}
+        producer:
+          required_acks: 0
+      kafka/traces:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ print "broker0-" $broker }}
+          - {{ print "broker1-" $broker }}
+          - {{ print "broker2-" $broker }}
+        protocol_version: 2.1.0
+        topic: {{ print "otel-" .Values.config.team "-traces" }}
+        producer:
+          required_acks: 0
+      {{- if .Values.otlpPrometheusExporter.enabled }}
+      otlphttp/prometheus:
+        endpoint: {{ .Values.otlpPrometheusExporter.endpoint }}
+      {{- end }}
+    extensions:
+      health_check:
+        endpoint: ${env:MY_POD_IP}:13133
+    service:
+      extensions:
+        - health_check
+      pipelines:
+        logs:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            {{- if .Values.filter }}
+            - filter
+            {{- end }}
+            {{- if .Values.addK8sAttributes }}
+            - k8sattributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka/logs
+        metrics:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            {{- if .Values.filter }}
+            - filter
+            {{- end }}
+            {{- if .Values.addK8sAttributes }}
+            - k8sattributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka/metrics
+            {{- if .Values.otlpPrometheusExporter.enabled }}
+            - otlphttp/prometheus
+            {{- end }}
+        traces:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            {{- if .Values.filter }}
+            - filter
+            {{- end }}
+            {{- if .Values.addK8sAttributes }}
+            - k8sattributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka/traces
+      telemetry:
+        logs:
+          encoding: json
+          level: {{ .Values.logLevel }}
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: ${env:MY_POD_IP}
+                    port: 8888
+                    without_type_suffix: true

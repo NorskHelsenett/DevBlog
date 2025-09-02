@@ -1,0 +1,90 @@
+autoscaling:
+  vertical:
+    enabled: false
+
+clusterCollector:
+  enabled: true
+  additionalMetricLabels: {}
+  resources: {}
+  scrapeInterval: 30s
+  targetAllocator:
+    resources: {}
+  telemetry:
+    logs:
+      level: warn
+
+kafka:
+  bootstrapServer: ""
+  compression:
+    type: zstd # options are none, gzip, snappy, lz4, and zstd
+    params:
+      # compression level used, see https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/kafkaexporter#configuration-settings
+      level: 11
+  secretName: "kafka-example-secret-name"
+  # deprecated, use signal specific topics in kafka.topics
+  topic: ""
+  topics:
+    logs: ""
+    metrics: ""
+    traces: ""
+
+otlpCollector:
+  enabled: false
+  # these are in the form key: value
+  additionalLabels: {}
+  exporters:
+    prometheusOtlp:
+      enabled: false
+      endpoint: ""
+  resources: {}
+  telemetry:
+    logs:
+      level: warn
+
+# deprecated, use clusterCollector.additionalMetricLabels
+labels: {}
+
+# deprecated, use clusterCollector.resources
+collector:
+  resources: {}
+
+# deprecated, use clusterCollector.targetallocator.resources
+targetallocator:
+  resources: {}
+
+# deprecated, use clusterCollector.scrapeInterval
+scrapeInterval: 30s
+
+opentelemetry-operator:
+  revisionHistoryLimit: 1
+  fullnameOverride: operator
+  manager:
+    image:
+      repository: container-registry.example.com/ghcr/open-telemetry/opentelemetry-operator/opentelemetry-operator
+    collectorImage:
+      repository: container-registry.example.com/ghcr/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib
+    targetAllocatorImage:
+      repository: container-registry.example.com/ghcr/open-telemetry/opentelemetry-operator/target-allocator
+    featureGatesMap:
+      operator.targetallocator.mtls: true
+    resources: {}
+    serviceMonitor:
+      enabled: true
+      extraLabels:
+        release: prometheus
+    prometheusRule:
+      enabled: true
+      extraLabels:
+        release: prometheus
+      defaultRules:
+        enabled: true
+    createRbacPermissions: true
+  kubeRBACProxy:
+    image:
+      repository: container-registry.example.com/quayio/brancz/kube-rbac-proxy
+    resources: {}
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    supplementalGroups:
+      - 100

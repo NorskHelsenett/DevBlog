@@ -1,0 +1,268 @@
+{{- if .Values.clusterCollector.enabled }}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: cluster
+spec:
+  config:
+    receivers:
+      prometheus:
+        config:
+          scrape_configs:
+            - job_name: "otel-collector"
+              scrape_interval: {{ coalesce .Values.clusterCollector.scrapeInterval .Values.scrapeInterval }}
+              static_configs:
+                - targets:
+                    - "0.0.0.0:8888"
+    processors:
+      {{- with ( coalesce .Values.clusterCollector.additionalMetricLabels .Values.labels ) }}
+      attributes:
+        actions:
+          {{- range $key, $value := . }}
+          - key: {{ $key }}
+            value: {{ $value }}
+            action: insert
+          {{- end }}
+      {{- end }}
+      batch:
+        send_batch_size: 1024
+        send_batch_max_size: 1024
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+    exporters:
+      kafka:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ .Values.kafka.bootstrapServer | quote }}
+        protocol_version: 2.1.0
+        topic: {{ coalesce .Values.kafka.topics.metrics .Values.kafka.topic | quote }}
+        producer:
+          {{- with .Values.kafka.compression }}
+          compression: {{ .type }}
+          compression_params:
+            level: {{ .params.level }}
+          {{- end }}
+          required_acks: 0
+    extensions:
+      health_check:
+        endpoint: ${env:MY_POD_IP}:13133
+    service:
+      extensions:
+        - health_check
+      pipelines:
+        metrics:
+          receivers:
+            - prometheus
+          processors:
+            - memory_limiter
+            {{- if ( coalesce .Values.clusterCollector.additionalMetricLabels .Values.labels ) }}
+            - attributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka
+      telemetry:
+        logs:
+          encoding: json
+          level: {{ .Values.clusterCollector.telemetry.logs.level }}
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+                    without_type_suffix: true
+  env:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: status.podIP
+  mode: statefulset
+  observability:
+    metrics:
+      enableMetrics: true
+  podDisruptionBudget:
+    maxUnavailable: 1
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    supplementalGroups:
+      - 100
+  resources:
+    {{- toYaml ( coalesce .Values.clusterCollector.resources .Values.collector.resources ) | nindent 4 }}
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsGroup: 10001
+  targetAllocator:
+    enabled: true
+    observability:
+      metrics:
+        enableMetrics: true
+    podDisruptionBudget:
+      maxUnavailable: 1
+    podSecurityContext:
+      seccompProfile:
+        type: RuntimeDefault
+      supplementalGroups:
+        - 100
+    prometheusCR:
+      enabled: true
+      podMonitorSelector: {}
+      probeSelector: {}
+      scrapeConfigSelector: {}
+      serviceMonitorSelector:
+        matchExpressions:
+          # We can not use the provided servicemonitor for the prometheus operator since we cannot load the ca.
+          # We instead create a scrapeconfig where we skip ca verification. See https://github.com/open-telemetry/opentelemetry-operator/issues/3724.
+          # We can also not use the kubelet service monitor. See https://github.com/open-telemetry/opentelemetry-operator/issues/3277.
+          - key: app
+            operator: NotIn
+            values:
+              - kube-prometheus-stack-operator
+              - kube-prometheus-stack-kubelet
+    resources:
+      {{- toYaml ( coalesce .Values.clusterCollector.targetAllocator.resources .Values.targetallocator.resources ) | nindent 6 }}
+    securityContext:
+      capabilities:
+        drop:
+          - ALL
+      seccompProfile:
+        type: RuntimeDefault
+      allowPrivilegeEscalation: false
+      runAsNonRoot: true
+      runAsGroup: 10001
+  volumes:
+    - name: kafka
+      secret:
+        secretName: {{ .Values.kafka.secretName }}
+  volumeMounts:
+    - name: kafka
+      readOnly: true
+      mountPath: /kafka/tls
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opentelemetry-clustercollector
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - namespaces
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+  - nonResourceURLs:
+      - "/metrics"
+    verbs:
+      - "get"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opentelemetry-clustercollector
+subjects:
+  - kind: ServiceAccount
+    name: cluster-collector
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: opentelemetry-clustercollector
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opentelemetry-targetallocator
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+      - namespaces
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+  - apiGroups:
+      - ""
+    resources:
+      - configmaps
+      - secrets
+    verbs:
+      - "get"
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+  - apiGroups:
+      - networking.k8s.io
+    resources:
+      - ingresses
+    verbs:
+      - "get"
+      - "list"
+      - "watch"
+  - nonResourceURLs:
+      - "/metrics"
+    verbs:
+      - "get"
+  - apiGroups:
+      - monitoring.coreos.com
+    resources:
+      - servicemonitors
+      - podmonitors
+      - scrapeconfigs
+      - probes
+    verbs:
+      - "*"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: opentelemetry-targetallocator
+subjects:
+  - kind: ServiceAccount
+    name: cluster-targetallocator
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: ClusterRole
+  name: opentelemetry-targetallocator
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

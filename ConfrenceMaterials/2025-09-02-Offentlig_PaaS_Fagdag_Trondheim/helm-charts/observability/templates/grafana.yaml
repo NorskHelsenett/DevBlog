@@ -1,0 +1,186 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.grafana.name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 9.3.0
+    chart: grafana
+    helm:
+      values: |
+        global:
+          imageRegistry: {{ .Values.registry }}
+        {{- if not .Values.grafana.persistence.readWriteMany }}
+        deploymentStrategy:
+          type: Recreate
+        {{- end }}
+        revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+          supplementalGroups:
+            - 100
+        containerSecurityContext:
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+        {{- if .Values.grafana.publish }}
+        service:
+          type: NodePort
+        {{- end }}
+        serviceMonitor:
+          enabled: true
+          labels:
+            release: prometheus
+        {{- if .Values.grafana.publish }}
+        ingress:
+          enabled: true
+          annotations:
+            cert-manager.io/cluster-issuer: letsencrypt-prod
+          {{- with .Values.grafana.ingress.extraAnnotations }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          pathType: ImplementationSpecific
+          ingressClassName: {{ .Values.grafana.ingressClassName }}
+          hosts:
+            - {{ .Values.grafana.fqdn }}
+          tls:
+            - hosts:
+              - {{ .Values.grafana.fqdn }}
+              secretName: {{ .Values.grafana.name }}-tls
+        {{- end }}
+        resources:
+          {{- toYaml .Values.grafana.resources | nindent 10 }}
+        persistence:
+          enabled: true
+          {{- if .Values.grafana.persistence.readWriteMany }}
+          accessModes:
+            - ReadWriteMany
+          {{- end }}
+          size: 2Gi
+          {{- with .Values.storageClass }}
+          storageClassName: {{ . }}
+          {{- end }}
+        initChownData:
+          enabled: false
+        admin:
+          existingSecret: grafana-example-secret-name
+        {{- if .Values.grafana.publish }}
+        envFromSecret: grafana-oauth2-example-secret-name
+        {{- end }}
+        {{- with .Values.grafana.plugins }}
+        plugins: {{- toYaml . | nindent 10 }}
+        {{- end }}
+        grafana.ini:
+          {{- with .Values.grafana.fqdn }}
+          server:
+            root_url: https://{{ . }}
+          {{- end }}
+          {{- if .Values.grafana.publish }}
+          auth:
+            disable_login_form: true
+          auth.generic_oauth:
+            enabled: true
+            name: "Microsoft Entra ID"
+            allow_sign_up: true
+            auto_login: true
+            scopes: openid email profile
+            auth_url: https://login.microsoftonline.com/<resourceid>/oauth2/v2.0/authorize
+            token_url: https://login.microsoftonline.com/<resourceid>/oauth2/v2.0/token
+            api_url: https://graph.microsoft.com/oidc/userinfo
+            {{- $orgMappingArray := list "team-admins:*:Admin" }}
+            {{- range .Values.tenants }}
+            {{- $orgMappingArray = append $orgMappingArray ( print .team ":" .team ":Editor" ) }}
+            {{- end }}
+            {{- range .Values.grafana.additionalOrgMappings }}
+            # expected value is dash-separated lowercase words : team- dash-separated lowercase-words : Viewer or Editor
+            # e. g. my-custom-role:team-admins:Viewer
+            {{- if ( not ( regexMatch "^([a-z]+-)*[a-z]+:team-([a-z]+-)*[a-z]+:(Editor|Viewer)$" . ) ) }}
+            {{- fail "invalid value for additional org mappings" }}
+            {{- end }}
+            {{- $orgMappingArray = append $orgMappingArray . }}
+            {{- end }}
+            {{- $orgMapping := join " " $orgMappingArray }}
+            role_attribute_path: contains(roles[*], 'team-admins') && 'GrafanaAdmin' || 'None'
+            allow_assign_grafana_admin: true
+            org_attribute_path: roles
+            org_mapping: {{ $orgMapping }}
+            use_pkce: true
+            use_refresh_token: true
+            role_attribute_strict: true
+          users:
+            auto_assign_org_role: None
+          {{- end }}
+          log:
+            mode: console
+            level: {{ .Values.logLevel }}
+          log.console:
+            format: {{ .Values.logFormat }}
+          feature_toggles:
+            enable: traceQLStreaming
+          analytics:
+            enabled: false
+            reporting_enabled: false
+            check_for_updates: false
+            check_for_plugin_updates: false
+          {{- if .Values.enableTracing }}
+          tracing.opentelemetry.otlp:
+            address: {{ .Values.internalCollectorDomainName }}:4317
+          {{- end }}
+          security:
+            allow_embedding: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.grafana.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+{{- if .Values.grafana.autoscaling.vertical.enabled }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ .Values.grafana.name }}
+  namespace: {{ .Values.grafana.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ .Values.grafana.name }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+{{- if .Values.grafana.publish }}
+---
+apiVersion: ako.vmware.com/v1alpha1
+kind: HostRule
+metadata:
+  name: {{ .Values.grafana.name }}
+  namespace: {{ .Values.grafana.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+  labels:
+    app.kubernetes.io/instance: {{ .Values.grafana.name }}
+spec:
+  virtualhost:
+    fqdn: {{ .Values.grafana.fqdn }}
+    datascripts: []
+    analyticsPolicy:
+      fullClientLogs:
+        enabled: true
+        throttle: DISABLED
+{{- end }}

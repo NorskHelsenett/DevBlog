@@ -1,0 +1,94 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.tempo.name }}-rules
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    release: prometheus
+spec: {{- .Files.Get "rules/tempo/recording.yaml" | nindent 2 }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.tempo.name }}-alerts
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    release: prometheus
+spec: {{- .Files.Get "rules/tempo/alerts.yaml" | nindent 2 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-block-builder-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-block-builder.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-block-builder.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-operational-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-operational.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-operational.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-reads-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-reads.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-reads.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-resources-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-resources.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-resources.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-rollout-progress-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-rollout-progress.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-rollout-progress.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-tenants-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-tenants.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-tenants.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.tempo.name }}-writes-dashboard
+  namespace: {{ .Values.tempo.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "tempo-writes.json": |-
+{{ .Files.Get "dashboards/tempo/tempo-writes.json" | indent 4 }}

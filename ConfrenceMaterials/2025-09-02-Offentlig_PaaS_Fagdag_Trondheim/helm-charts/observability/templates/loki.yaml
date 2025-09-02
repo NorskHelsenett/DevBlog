@@ -1,0 +1,454 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.loki.name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 6.34.0
+    chart: loki
+    helm:
+      values: |
+        global:
+          image:
+            registry: {{ .Values.registry }}
+          extraArgs:
+            - -config.expand-env=true
+          extraEnv:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          {{- if .Values.enableTracing }}
+            - name: JAEGER_AGENT_HOST
+              value: "{{ .Values.internalCollectorDomainName }}"
+            - name: JAEGER_SAMPLER_TYPE
+              value: "const"
+            - name: JAEGER_SAMPLER_PARAM
+              value: "1"
+          {{- end }}
+          extraEnvFrom:
+            - secretRef:
+                name: loki-s3-example-secret-name
+        fullnameOverride: {{ .Values.loki.name }}
+        deploymentMode: Distributed
+        loki:
+          revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+          podSecurityContext:
+            fsGroup: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            supplementalGroups:
+              - 100
+          containerSecurityContext:
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+          extraMemberlistConfig:
+            bind_addr:
+              - ${MY_POD_IP}
+          server:
+            log_level: {{ .Values.logLevel }}
+            log_format: {{ .Values.logFormat }}
+          limits_config:
+            allow_structured_metadata: true
+            # This is 8 times larger than default. Increased since teams were hitting rate limit with default value.
+            ingestion_rate_mb: 32
+            # This is more than 8 times larger than default. Increased since teams were hitting rate limit with default value.
+            ingestion_burst_size_mb: 48
+            retention_period: {{ .Values.loki.retention }}
+            max_query_length: {{ .Values.loki.retention }}
+            # This is 32 times larger than default. Increased due to teams hitting limit.
+            max_structured_metadata_size: 2MB
+          storage:
+            type: s3
+            s3:
+              endpoint: {{ .Values.s3Endpoint }}
+              accessKeyId: ${LOKI_S3_USER_EXAMPLE_KEY_NAME}
+              secretAccessKey: ${LOKI_S3_PASSWORD_EXAMPLE_KEY_NAME}
+              s3ForcePathStyle: true
+              http_config:
+                insecure_skip_verify: true
+            bucketNames:
+              chunks: {{ .Values.bucketPrefix }}{{ .Values.loki.name }}-chunks
+              ruler: {{ .Values.bucketPrefix }}{{ .Values.loki.name }}-ruler
+          schemaConfig:
+            configs:
+              - from: 2024-04-01
+                store: tsdb
+                object_store: s3
+                schema: v13
+                index:
+                  prefix: loki_index_
+                  period: 24h
+          compactor:
+            retention_enabled: true
+            delete_request_store: s3
+          analytics:
+            reporting_enabled: false
+          querier:
+            multi_tenant_queries_enabled: true
+          ingester:
+            chunk_encoding: snappy
+          {{- if .Values.enableTracing }}
+          tracing:
+            enabled: true
+          {{- end }}
+        test:
+          enabled: true
+        lokiCanary:
+          enabled: true
+          resources:
+            {{- toYaml .Values.loki.canary.resources | nindent 12 }}
+        gateway:
+          enabled: {{ .Values.loki.useGateway }}
+          autoscaling:
+            enabled: {{ .Values.loki.useGateway }}
+            minReplicas: 2
+            maxReplicas: 9
+            targetMemoryUtilizationPercentage: 75
+          podSecurityContext:
+            fsGroup: 101
+            runAsGroup: 101
+            runAsNonRoot: true
+            runAsUser: 101
+            supplementalGroups:
+              - 100
+          containerSecurityContext:
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            {{- toYaml .Values.loki.gateway.resources | nindent 12 }}
+        singleBinary:
+          replicas: 0
+        write:
+          replicas: 0
+        read:
+          replicas: 0
+        backend:
+          replicas: 0
+        ingester:
+          replicas: {{ .Values.loki.ingester.replicas }}
+          resources:
+            {{- toYaml .Values.loki.ingester.resources | nindent 12 }}
+          updateStrategy:
+            type: OnDelete
+          persistence:
+            enabled: true
+            claims:
+              - name: data
+                size: 10Gi
+                {{- with .Values.storageClass }}
+                storageClass: {{ . }}
+                {{- end }}
+          rolloutGroupPrefix: loki
+          addIngesterNamePrefix: loki
+        distributor:
+          replicas: 3
+          resources:
+            {{- toYaml .Values.loki.distributor.resources | nindent 12 }}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app.kubernetes.io/component: loki-distributor
+                  topologyKey: kubernetes.io/hostname
+          maxUnavailable: 2
+        querier:
+          autoscaling:
+            enabled: true
+            minReplicas: 2
+            maxReplicas: 22
+            {{- if .Values.prometheusAdapter.enabled }}
+            targetCPUUtilizationPercentage: null
+            customMetrics:
+              - type: External
+                external:
+                  metric:
+                    name: loki_query_scheduler_inflight_requests
+                  target:
+                    type: AverageValue
+                    # This value should be 75% of max_concurrent configuration option set in loki limits_config.
+                    # The default value for max_concurrent is 4, so this value should default be 3.
+                    averageValue: 3
+            behavior:
+              enabled: true
+              scaleDown:
+                stabilizationWindowSeconds: 1800
+            {{- end }}
+          extraEnv:
+            - name: GOMEMLIMIT
+              valueFrom:
+                resourceFieldRef:
+                  containerName: querier
+                  resource: requests.memory
+          resources:
+            {{- toYaml .Values.loki.querier.resources | nindent 12 }}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution: null
+              preferredDuringSchedulingIgnoredDuringExecution:
+                - weight: 100
+                  podAffinityTerm:
+                    labelSelector:
+                      matchExpressions:
+                        - key: app.kubernetes.io/component
+                          operator: In
+                          values:
+                            - querier
+                        - key: app.kubernetes.io/instance
+                          operator: In
+                          values:
+                            - loki
+                    topologyKey: kubernetes.io/hostname
+          maxUnavailable: 2
+        queryFrontend:
+          replicas: 2
+          resources:
+            {{- toYaml .Values.loki.queryFrontend.resources | nindent 12 }}
+          maxUnavailable: 1
+        queryScheduler:
+          replicas: 2
+          resources:
+            {{- toYaml .Values.loki.queryScheduler.resources | nindent 12 }}
+        indexGateway:
+          replicas: 2
+          resources:
+            {{- toYaml .Values.loki.indexGateway.resources | nindent 12 }}
+          maxUnavailable: 1
+          persistence:
+            enabled: true
+            size: 1Gi
+            {{- with .Values.storageClass }}
+            storageClass: {{ . }}
+            {{- end }}
+        compactor:
+          replicas: 1
+          resources:
+            {{- toYaml .Values.loki.compactor.resources | nindent 12 }}
+          persistence:
+            enabled: true
+            claims:
+              - name: data
+                size: 1Gi
+                {{- with .Values.storageClass }}
+                storageClass: {{ . }}
+                {{- end }}
+        bloomGateway:
+          replicas: 0
+        bloomCompactor:
+          replicas: 0
+        ruler:
+          replicas: 1
+          resources:
+            {{- toYaml .Values.loki.ruler.resources | nindent 12 }}
+          persistence:
+            enabled: true
+            size: 1Gi
+            {{- with .Values.storageClass }}
+            storageClass: {{ . }}
+            {{- end }}
+        memcached:
+          image:
+            repository: container-registry.example.com/dockerhub/memcached
+          podSecurityContext:
+            seccompProfile:
+              type: RuntimeDefault
+            supplementalGroups:
+              - 100
+          containerSecurityContext:
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 11211
+            runAsGroup: 11211
+            readOnlyRootFilesystem: true
+        memcachedExporter:
+          image:
+            repository: container-registry.example.com/dockerhub/prom/memcached-exporter
+          resources:
+            {{- toYaml .Values.loki.memcachedExporter.resources | nindent 12 }}
+          containerSecurityContext:
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            readOnlyRootFilesystem: true
+        resultsCache:
+          replicas: {{ .Values.loki.resultsCache.replicas }}
+          {{- $allocatedMemory := 64 }}
+          allocatedMemory: {{ $allocatedMemory }}
+          {{- $requestMemory := div ( add ( mul $allocatedMemory 12 ) 5 ) 10 }}
+          resources:
+            limits:
+              memory: {{ $requestMemory }}Mi
+            requests:
+              cpu: 50m
+              memory: {{ $requestMemory }}Mi
+        chunksCache:
+          replicas: {{ .Values.loki.chunksCache.replicas }}
+          {{- $allocatedMemory := .Values.loki.cache.memoryMiB }}
+          allocatedMemory: {{ $allocatedMemory }}
+          {{- $requestMemory := div ( add ( mul $allocatedMemory 12 ) 5 ) 10 }}
+          resources:
+            limits:
+              memory: {{ $requestMemory }}Mi
+            requests:
+              cpu: 100m
+              memory: {{ $requestMemory }}Mi
+        rollout_operator:
+          enabled: true
+          image:
+            repository: {{ .Values.registry }}/grafana/rollout-operator
+          podSecurityContext:
+            fsGroup: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+            supplementalGroups:
+              - 100
+          serviceMonitor:
+            enabled: true
+            labels:
+              release: prometheus
+        monitoring:
+          serviceMonitor:
+            enabled: true
+            labels:
+              release: prometheus
+            relabelings:
+              - action: replace
+                replacement: loki/$1
+                regex: loki/loki-(.*)
+                sourceLabels:
+                  - job
+                targetLabel: job
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.loki.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: querier
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    release: prometheus
+spec:
+  groups:
+    - name: Querier
+      rules:
+        - alert: LokiAutoscalerMaxedOut
+          expr: kube_horizontalpodautoscaler_status_current_replicas{namespace=~"{{ .Values.loki.namespace }}"} == kube_horizontalpodautoscaler_spec_max_replicas{namespace=~"{{ .Values.loki.namespace }}"}
+          for: 3h
+          labels:
+            severity: warning
+          annotations:
+            description: HPA {{"{{ $labels.namespace }}"}}/{{"{{ $labels.horizontalpodautoscaler }}"}} has been running at max replicas for longer than 3h; this can indicate underprovisioning.
+            summary: HPA has been running at max replicas for an extended time
+{{- if .Values.loki.autoscaling.vertical.enabled }}
+{{- range ( list "distributor" "querier" "query-frontend" "query-scheduler" "rollout-operator" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.loki.name "-" . }}
+  namespace: {{ $.Values.loki.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ print $.Values.loki.name "-" . }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+{{- range ( list "compactor" "index-gateway" "ingester-zone-a" "ingester-zone-b" "ingester-zone-c" "ruler" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.loki.name "-" . }}
+  namespace: {{ $.Values.loki.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: StatefulSet
+    name: {{ print $.Values.loki.name "-" . }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+# we don't autoscale memcached memory, it will use what is available. We can however autoscale the memcached-exporter that is used to export metrics to prometheus
+{{- range ( list "chunks-cache" "results-cache" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.loki.name "-" . }}
+  namespace: {{ $.Values.loki.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: StatefulSet
+    name: {{ print $.Values.loki.name "-" . }}
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "memcached"
+        controlledResources:
+          - "cpu"
+      - containerName: "exporter"
+        controlledResources:
+          - "cpu"
+          - "memory"
+{{- end }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print .Values.loki.name "-canary" }}
+  namespace: {{ .Values.loki.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: DaemonSet
+    name: {{ print .Values.loki.name "-canary" }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}

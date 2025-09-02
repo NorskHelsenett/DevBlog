@@ -1,0 +1,179 @@
+{{- if .Values.otlpCollector.enabled }}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: otlp
+spec:
+  config:
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: ${env:MY_POD_IP}:4317
+          http:
+            endpoint: ${env:MY_POD_IP}:4318
+    processors:
+      {{- with .Values.otlpCollector.additionalLabels }}
+      attributes:
+        actions:
+          {{- range $key, $value := . }}
+          - key: {{ $key }}
+            value: {{ $value }}
+            action: insert
+          {{- end }}
+      {{- end }}
+      batch:
+        send_batch_size: 1024
+        send_batch_max_size: 1024
+      memory_limiter:
+        check_interval: 5s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+    exporters:
+      kafka/logs:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ .Values.kafka.bootstrapServer | quote }}
+        protocol_version: 2.1.0
+        topic: {{ .Values.kafka.topics.logs | quote }}
+        producer:
+          {{- with .Values.kafka.compression }}
+          compression: {{ .type }}
+          compression_params:
+            level: {{ .params.level }}
+          {{- end }}
+          required_acks: 0
+      kafka/metrics:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ .Values.kafka.bootstrapServer | quote }}
+        protocol_version: 2.1.0
+        topic: {{ .Values.kafka.topics.metrics | quote }}
+        producer:
+          {{- with .Values.kafka.compression }}
+          compression: {{ .type }}
+          compression_params:
+            level: {{ .params.level }}
+          {{- end }}
+          required_acks: 0
+      kafka/traces:
+        auth:
+          tls:
+            ca_file: /kafka/tls/BrokerCaCertificate.pem
+            cert_file: /kafka/tls/UserCertificate.pem
+            key_file: /kafka/tls/UserKey.pem
+        brokers:
+          - {{ .Values.kafka.bootstrapServer | quote }}
+        protocol_version: 2.1.0
+        topic: {{ .Values.kafka.topics.traces | quote }}
+        producer:
+          {{- with .Values.kafka.compression }}
+          compression: {{ .type }}
+          compression_params:
+            level: {{ .params.level }}
+          {{- end }}
+          required_acks: 0
+      {{- if .Values.otlpCollector.exporters.prometheusOtlp.enabled }}
+      otlphttp/prometheus:
+        endpoint: {{ .Values.otlpCollector.exporters.prometheusOtlp.endpoint }}
+      {{- end }}
+    extensions:
+      health_check:
+        endpoint: ${env:MY_POD_IP}:13133
+    service:
+      extensions:
+        - health_check
+      pipelines:
+        logs:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            {{- if .Values.otlpCollector.additionalLabels }}
+            - attributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka/logs
+        metrics:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            {{- if .Values.otlpCollector.additionalLabels }}
+            - attributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka/metrics
+            {{- if .Values.otlpCollector.exporters.prometheusOtlp.enabled }}
+            - otlphttp/prometheus
+            {{- end }}
+        traces:
+          receivers:
+            - otlp
+          processors:
+            - memory_limiter
+            {{- if .Values.otlpCollector.additionalLabels }}
+            - attributes
+            {{- end }}
+            - batch
+          exporters:
+            - kafka/traces
+      telemetry:
+        logs:
+          encoding: json
+          level: {{ .Values.otlpCollector.telemetry.logs.level }}
+        metrics:
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: ${env:MY_POD_IP}
+                    port: 8888
+                    without_type_suffix: true
+  env:
+    - name: MY_POD_IP
+      valueFrom:
+        fieldRef:
+          apiVersion: v1
+          fieldPath: status.podIP
+  mode: deployment
+  observability:
+    metrics:
+      enableMetrics: true
+  podDisruptionBudget:
+    maxUnavailable: 1
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    supplementalGroups:
+      - 100
+  resources:
+    {{- toYaml .Values.otlpCollector.resources | nindent 4 }}
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsGroup: 10001
+  volumes:
+    - name: kafka
+      secret:
+        secretName: {{ .Values.kafka.secretName }}
+  volumeMounts:
+    - name: kafka
+      readOnly: true
+      mountPath: /kafka/tls
+{{- end }}

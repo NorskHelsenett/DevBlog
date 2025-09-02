@@ -1,0 +1,14 @@
+{{- if .Values.addK8sAttributes }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ index .Values "opentelemetry-collector" "fullnameOverride" }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ index .Values "opentelemetry-collector" "fullnameOverride" }}
+    namespace: {{ template "opentelemetry-collector.namespace" . }}
+roleRef:
+  kind: ClusterRole
+  name: {{ index .Values "opentelemetry-collector" "fullnameOverride" }}
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

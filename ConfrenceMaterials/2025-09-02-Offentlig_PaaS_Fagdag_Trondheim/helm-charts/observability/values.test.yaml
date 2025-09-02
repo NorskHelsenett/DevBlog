@@ -1,0 +1,267 @@
+s3Endpoint: "s3.example.com"
+environment: "test"
+bucketPrefix: "otel-"
+enableTracing: false
+grafana:
+  additionalOrgMappings:
+    - "team-first-example:team-second-example:Editor"
+  publish: "true"
+  fqdn: "test.grafana.example.com"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  autoscaling:
+    vertical:
+      enabled: true
+loki:
+  canary:
+    resources:
+      requests:
+        cpu: 10m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  compactor:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
+  distributor:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+  gateway:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  indexGateway:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+  ingester:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
+  memcachedExporter:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  querier:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 2048Mi
+      limits:
+        memory: 4096Mi
+  queryFrontend:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
+  queryScheduler:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  ruler:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  autoscaling:
+    vertical:
+      enabled: true
+mimir:
+  alertmanager:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+  compactor:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+  distributor:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 1024Mi
+      limits:
+        memory: 2048Mi
+  gateway:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+  ingester:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 4096Mi
+      limits:
+        memory: 8192Mi
+  memcachedExporter:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  overridesExporter:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  querier:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
+  queryFrontend:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  queryScheduler:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  ruler:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  storeGateway:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
+  autoscaling:
+    vertical:
+      enabled: true
+opentelemetryCollector:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  autoscaling:
+    vertical:
+      enabled: true
+prometheusAdapter:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  autoscaling:
+    vertical:
+      enabled: true
+tempo:
+  compactor:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1024Mi
+      limits:
+        memory: 2048Mi
+  distributor:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 1280Mi
+      limits:
+        memory: 2560Mi
+  ingester:
+    resources:
+      requests:
+        cpu: 75m
+        memory: 2560Mi
+      limits:
+        memory: 5120Mi
+  memcachedExporter:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+  metricsGenerator:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 2048Mi
+      limits:
+        memory: 4096Mi
+  querier:
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1024Mi
+      limits:
+        memory: 2048Mi
+  queryFrontend:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 512Mi
+      limits:
+        memory: 1024Mi
+  autoscaling:
+    vertical:
+      enabled: true
+tenants:
+  - team: "team-admins"
+    opentelemetryCollector:
+      cpu: 100m
+      memory: 256Mi
+  - team: "team-example"
+

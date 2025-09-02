@@ -1,0 +1,160 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.loki.name }}-rules
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    release: prometheus
+spec: {{- .Files.Get "rules/loki/recording.yaml" | nindent 2 }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ .Values.loki.name }}-alerts
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    release: prometheus
+spec: {{- .Files.Get "rules/loki/alerts.yaml" | nindent 2 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-bloom-build-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-bloom-build.json": |-
+{{ .Files.Get "dashboards/loki/loki-bloom-build.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-bloom-gateway-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-bloom-gateway.json": |-
+{{ .Files.Get "dashboards/loki/loki-bloom-gateway.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-chunks-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-chunks.json": |-
+{{ .Files.Get "dashboards/loki/loki-chunks.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-deletion-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-deletion.json": |-
+{{ .Files.Get "dashboards/loki/loki-deletion.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-logs-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-logs.json": |-
+{{ .Files.Get "dashboards/loki/loki-logs.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-mixin-recording-rules-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-mixin-recording-rules.json": |-
+{{ .Files.Get "dashboards/loki/loki-mixin-recording-rules.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-operational-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-operational.json": |-
+{{ .Files.Get "dashboards/loki/loki-operational.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-reads-resources-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-reads-resources.json": |-
+{{ .Files.Get "dashboards/loki/loki-reads-resources.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-reads-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-reads.json": |-
+{{ .Files.Get "dashboards/loki/loki-reads.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-retention-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-retention.json": |-
+{{ .Files.Get "dashboards/loki/loki-retention.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-thanos-object-storage-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-thanos-object-storage.json": |-
+{{ .Files.Get "dashboards/loki/loki-thanos-object-storage.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-writes-resources-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-writes-resources.json": |-
+{{ .Files.Get "dashboards/loki/loki-writes-resources.json" | indent 4 }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.loki.name }}-writes-dashboard
+  namespace: {{ .Values.loki.namespace }}
+  labels:
+    grafana_dashboard: "1"
+data:
+  "loki-writes.json": |-
+{{ .Files.Get "dashboards/loki/loki-writes.json" | indent 4 }}

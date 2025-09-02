@@ -1,0 +1,81 @@
+{{- if .Values.prometheusAdapter.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.prometheusAdapter.name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  source:
+    repoURL: https://prometheus-community.github.io/helm-charts
+    targetRevision: 5.1.9
+    chart: prometheus-adapter
+    helm:
+      values: |
+        logLevel: 2
+        prometheus:
+          url: http://prometheus-kube-prometheus-prometheus.prometheus-operator
+        podSecurityContext:
+          fsGroup: 10001
+          seccompProfile:
+            type: RuntimeDefault
+          supplementalGroups:
+            - 100
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 10001
+          runAsGroup: 10001
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          {{- toYaml .Values.prometheusAdapter.resources | nindent 10 }}
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: https
+            scheme: HTTPS
+          initialDelaySeconds: 30
+          timeoutSeconds: 5
+        rules:
+          default: false
+          external:
+            - seriesQuery: 'loki_query_scheduler_inflight_requests{namespace="{{ .Values.loki.namespace }}", quantile="0.75"}'
+              resources:
+                template: <<.Resource>>
+              name:
+                matches: ""
+                as: "loki_query_scheduler_inflight_requests"
+              metricsQuery: sum(max_over_time(loki_query_scheduler_inflight_requests{namespace="{{ .Values.loki.namespace }}", quantile="0.75"}[2m]))
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.prometheusAdapter.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+{{- if .Values.prometheusAdapter.autoscaling.vertical.enabled }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ .Values.prometheusAdapter.name }}
+  namespace: {{ .Values.prometheusAdapter.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ .Values.prometheusAdapter.name }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+{{- end }}

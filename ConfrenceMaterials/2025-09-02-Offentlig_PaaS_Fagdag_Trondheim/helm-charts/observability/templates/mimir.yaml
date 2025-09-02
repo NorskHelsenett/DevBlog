@@ -1,0 +1,387 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.mimir.name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: 5.7.0
+    chart: mimir-distributed
+    helm:
+      values: |
+        image:
+          repository: {{ .Values.registry }}/grafana/mimir
+        fullnameOverride: {{ .Values.mimir.name }}
+        global:
+          extraEnv:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- if .Values.enableTracing }}
+            - name: JAEGER_AGENT_HOST
+              value: "{{ .Values.internalCollectorDomainName }}"
+            - name: JAEGER_SAMPLER_TYPE
+              value: "const"
+            - name: JAEGER_SAMPLER_PARAM
+              value: "1"
+            {{- end }}
+          extraEnvFrom:
+            - secretRef:
+                name: mimir-s3-example-secret-name
+        mimir:
+          structuredConfig:
+            limits:
+              # Default is 0. Must be > 0 to enable exemplars in Mimir.
+              max_global_exemplars_per_user: 10000000
+              # Default is 150000.
+              max_global_series_per_user: 10000000
+              compactor_blocks_retention_period: {{ .Values.mimir.retention }}
+              # Default is 10000.
+              ingestion_rate: 500000
+              # Default is 200000.
+              ingestion_burst_size: 10000000
+              out_of_order_time_window: 5m
+            common:
+              storage:
+                backend: s3
+                s3:
+                  endpoint: {{ .Values.s3Endpoint }}
+                  access_key_id: ${MIMIR_S3_USER_EXAMPLE_KEY_NAME}
+                  secret_access_key: ${MIMIR_S3_PASSWORD_EXAMPLE_KEY_NAME}
+                  http:
+                    insecure_skip_verify: true
+            alertmanager_storage:
+              s3:
+                bucket_name: {{ .Values.bucketPrefix }}{{ .Values.mimir.name }}-alertmanager
+            blocks_storage:
+              s3:
+                bucket_name: {{ .Values.bucketPrefix }}{{ .Values.mimir.name }}-blocks
+              tsdb:
+                flush_blocks_on_shutdown: true
+            ruler_storage:
+              s3:
+                bucket_name: {{ .Values.bucketPrefix }}{{ .Values.mimir.name }}-ruler
+            memberlist:
+              bind_addr:
+                - ${MY_POD_IP}
+            server:
+              log_level: {{ .Values.logLevel }}
+              log_format: {{ .Values.logFormat }}
+            tenant_federation:
+              enabled: true
+            usage_stats:
+              enabled: false
+        alertmanager:
+          replicas: 2
+          resources:
+            {{- toYaml .Values.mimir.alertmanager.resources | nindent 12 }}
+          {{- with .Values.storageClass }}
+          persistentVolume:
+            storageClass: {{ . }}
+          {{- end }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        distributor:
+          replicas: 9
+          resources:
+            {{- toYaml .Values.mimir.distributor.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        ingester:
+          replicas: {{ .Values.mimir.ingester.replicas }}
+          resources:
+            {{- toYaml .Values.mimir.ingester.resources | nindent 12 }}
+          topologySpreadConstraints: {}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: target
+                        operator: In
+                        values:
+                          - ingester
+                  topologyKey: 'kubernetes.io/hostname'
+                - labelSelector:
+                    matchExpressions:
+                      - key: app.kubernetes.io/component
+                        operator: In
+                        values:
+                          - ingester
+                  topologyKey: 'kubernetes.io/hostname'
+          {{- with .Values.storageClass }}
+          persistentVolume:
+            storageClass: {{ . }}
+          {{- end }}
+            size: {{ .Values.mimir.ingester.persistentVolume.size }}
+          securityContext:
+            supplementalGroups:
+              - 100
+          zoneAwareReplication:
+            topologyKey: 'kubernetes.io/hostname'
+        overrides_exporter:
+          replicas: 1
+          resources:
+            {{- toYaml .Values.mimir.overridesExporter.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        ruler:
+          replicas: 1
+          resources:
+            {{- toYaml .Values.mimir.ruler.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        querier:
+          replicas: {{ .Values.mimir.querier.replicas }}
+          resources:
+            {{- toYaml .Values.mimir.querier.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        query_frontend:
+          replicas: 2
+          resources:
+            {{- toYaml .Values.mimir.queryFrontend.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        query_scheduler:
+          replicas: 2
+          resources:
+            {{- toYaml .Values.mimir.queryScheduler.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        store_gateway:
+          replicas: {{ .Values.mimir.storeGateway.replicas }}
+          resources:
+            {{- toYaml .Values.mimir.storeGateway.resources | nindent 12 }}
+          topologySpreadConstraints: {}
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: target
+                        operator: In
+                        values:
+                          - store-gateway
+                  topologyKey: 'kubernetes.io/hostname'
+                - labelSelector:
+                    matchExpressions:
+                      - key: app.kubernetes.io/component
+                        operator: In
+                        values:
+                          - store-gateway
+                  topologyKey: 'kubernetes.io/hostname'
+          zoneAwareReplication:
+            topologyKey: 'kubernetes.io/hostname'
+          {{- with .Values.storageClass }}
+          persistentVolume:
+            storageClass: {{ . }}
+          {{- end }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        compactor:
+          resources:
+            {{- toYaml .Values.mimir.compactor.resources | nindent 12 }}
+          persistentVolume:
+            size: {{ .Values.mimir.compactor.persistentVolume.size }}
+          {{- with .Values.storageClass }}
+            storageClass: {{ . }}
+          {{- end }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        memcached:
+          image:
+            repository: container-registry.example.com/dockerhub/memcached
+          podSecurityContext:
+            seccompProfile:
+              type: RuntimeDefault
+            supplementalGroups:
+              - 100
+          containerSecurityContext:
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 11211
+            runAsGroup: 11211
+            readOnlyRootFilesystem: true
+        memcachedExporter:
+          image:
+            repository: container-registry.example.com/dockerhub/prom/memcached-exporter
+          resources:
+            {{- toYaml .Values.mimir.memcachedExporter.resources | nindent 12 }}
+          containerSecurityContext:
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+            privileged: false
+            allowPrivilegeEscalation: false
+            runAsNonRoot: true
+            runAsUser: 101
+            runAsGroup: 101
+            readOnlyRootFilesystem: true
+        chunks-cache:
+          enabled: true
+          replicas: {{ .Values.mimir.chunksCache.replicas }}
+          allocatedMemory: 2048
+        index-cache:
+          enabled: true
+          replicas: {{ .Values.mimir.indexCache.replicas }}
+          allocatedMemory: 512
+        metadata-cache:
+          enabled: true
+          replicas: {{ .Values.mimir.metadataCache.replicas }}
+          allocatedMemory: 128
+        results-cache:
+          enabled: true
+          replicas: {{ .Values.mimir.resultsCache.replicas }}
+          allocatedMemory: 128
+        rollout_operator:
+          image:
+            repository: {{ .Values.registry }}/grafana/rollout-operator
+          podSecurityContext:
+            fsGroup: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+            supplementalGroups:
+              - 100
+          serviceMonitor:
+            enabled: true
+            labels:
+              release: prometheus
+        minio:
+          enabled: false
+        nginx:
+          enabled: false
+        gateway:
+          enabledNonEnterprise: {{ .Values.mimir.useGateway }}
+          autoscaling:
+            enabled: {{ .Values.mimir.useGateway }}
+            minReplicas: 2
+            maxReplicas: 9
+          podSecurityContext:
+            fsGroup: 101
+            runAsGroup: 101
+            runAsNonRoot: true
+            runAsUser: 101
+            supplementalGroups:
+              - 100
+          containerSecurityContext:
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            allowPrivilegeEscalation: false
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            {{- toYaml .Values.mimir.gateway.resources | nindent 12 }}
+          nginx:
+            image:
+              registry: "container-registry.example.com"
+              repository: dockerhub/nginxinc/nginx-unprivileged
+        metaMonitoring:
+          dashboards:
+            enabled: true
+          serviceMonitor:
+            enabled: true
+            labels:
+              release: prometheus
+          prometheusRule:
+            enabled: true
+            mimirAlerts: true
+            mimirRules: true
+            labels:
+              release: prometheus
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.mimir.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+{{- if .Values.mimir.autoscaling.vertical.enabled }}
+{{- range ( list "distributor" "overrides-exporter" "querier" "query-frontend" "query-scheduler" "rollout-operator" "ruler" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.mimir.name "-" . }}
+  namespace: {{ $.Values.mimir.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ print $.Values.mimir.name "-" . }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+{{- range ( list "alertmanager" "compactor" "ingester-zone-a" "ingester-zone-b" "ingester-zone-c" "store-gateway-zone-a" "store-gateway-zone-b" "store-gateway-zone-c" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.mimir.name "-" . }}
+  namespace: {{ $.Values.mimir.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: StatefulSet
+    name: {{ print $.Values.mimir.name "-" . }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+# we don't autoscale memcached memory, it will use what is available. We can however autoscale the memcached-exporter that is used to export metrics to prometheus
+{{- range ( list "chunks-cache" "index-cache" "metadata-cache" "results-cache" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.mimir.name "-" . }}
+  namespace: {{ $.Values.mimir.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: StatefulSet
+    name: {{ print $.Values.mimir.name "-" . }}
+  updatePolicy:
+    updateMode: "Auto"
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "memcached"
+        controlledResources:
+          - "cpu"
+      - containerName: "exporter"
+        controlledResources:
+          - "cpu"
+          - "memory"
+{{- end }}
+{{- end }}

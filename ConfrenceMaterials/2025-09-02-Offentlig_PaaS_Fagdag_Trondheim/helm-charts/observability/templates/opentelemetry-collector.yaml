@@ -1,0 +1,247 @@
+{{- range .Values.tenants }}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ print $.Values.opentelemetryCollector.name "-" .team }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ $.Values.argocdProject }}
+  source:
+    repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+    targetRevision: 0.127.2
+    chart: opentelemetry-collector
+    helm:
+      values: |
+        fullnameOverride: {{ print $.Values.opentelemetryCollector.name "-" .team }}
+        mode: "deployment"
+        config:
+          receivers:
+            otlp: null
+            zipkin: null
+            jaeger: null
+            prometheus: null
+            {{- $bootstrapServer := "" }}
+            {{- if ( eq $.Values.environment "prod" ) }}
+            {{- $bootstrapServer = ( print "bootstrap-" $.Values.location ".kafka.example.com:9094" ) }}
+            {{- else }}
+            {{- $bootstrapServer = ( print "bootstrap-" $.Values.location "-" $.Values.environment ".kafka.example.com:9094" ) }}
+            {{- end }}
+            kafka/logs:
+              group_id: {{ $.Values.consumerGroupId }}
+              protocol_version: 2.1.0
+              brokers:
+                - {{ $bootstrapServer }}
+              topic: {{ print "otel-" .team "-logs" }}
+              auth:
+                tls:
+                  ca_file: /kafka/tls/BrokerCaCertificate.pem
+                  cert_file: /kafka/tls/UserCertificate.pem
+                  key_file: /kafka/tls/UserKey.pem
+              message_marking:
+                after: true
+                on_error: true
+              error_backoff:
+                enabled: true
+            kafka/metrics:
+              group_id: {{ $.Values.consumerGroupId }}
+              protocol_version: 2.1.0
+              brokers:
+                - {{ $bootstrapServer }}
+              topic: {{ print "otel-" .team "-metrics" }}
+              auth:
+                tls:
+                  ca_file: /kafka/tls/BrokerCaCertificate.pem
+                  cert_file: /kafka/tls/UserCertificate.pem
+                  key_file: /kafka/tls/UserKey.pem
+              message_marking:
+                after: true
+                on_error: true
+              error_backoff:
+                enabled: true
+            kafka/traces:
+              group_id: {{ $.Values.consumerGroupId }}
+              protocol_version: 2.1.0
+              brokers:
+                - {{ $bootstrapServer }}
+              topic: {{ print "otel-" .team "-traces" }}
+              auth:
+                tls:
+                  ca_file: /kafka/tls/BrokerCaCertificate.pem
+                  cert_file: /kafka/tls/UserCertificate.pem
+                  key_file: /kafka/tls/UserKey.pem
+              message_marking:
+                after: true
+                on_error: true
+              error_backoff:
+                enabled: true
+          processors:
+            # The memory_limiter processor is enabled by default in the upstream helm chart.
+            # We do not need it in our case since we do not want to drop records from kafka if memory usage is close to limit,
+            # we should rather get OOMKilled and start reading the topic on restart.
+            memory_limiter: null
+          exporters:
+            otlphttp/loki:
+              endpoint: http://{{ $.Values.loki.name }}-distributor.{{ $.Values.loki.namespace }}:3100/otlp
+              retry_on_failure:
+                max_elapsed_time: 0s
+              headers:
+                "X-Scope-OrgId": {{ .team }}
+            otlphttp/mimir:
+              endpoint: http://{{ $.Values.mimir.name }}-distributor.{{ $.Values.mimir.namespace }}:8080/otlp
+              retry_on_failure:
+                max_elapsed_time: 0s
+              headers:
+                "X-Scope-OrgId": {{ .team }}
+            otlp/tempo:
+              endpoint: {{ $.Values.tempo.name }}-distributor.{{ $.Values.tempo.namespace }}:4317
+              tls:
+                insecure: true
+              retry_on_failure:
+                max_elapsed_time: 0s
+              headers:
+                "X-Scope-OrgId": {{ .team }}
+            debug: null
+          service:
+            pipelines:
+              logs:
+                receivers:
+                  - kafka/logs
+                processors:
+                  - batch
+                exporters:
+                  - otlphttp/loki
+              metrics:
+                receivers:
+                  - kafka/metrics
+                processors:
+                  - batch
+                exporters:
+                  - otlphttp/mimir
+              traces:
+                receivers:
+                  - kafka/traces
+                processors:
+                  - batch
+                exporters:
+                  - otlp/tempo
+            telemetry:
+              logs:
+                encoding: {{ $.Values.logFormat }}
+                level: {{ $.Values.logLevel }}
+              metrics:
+                readers:
+                  - pull:
+                      exporter:
+                        prometheus:
+                          host: ${env:MY_POD_IP}
+                          port: 8888
+                          without_type_suffix: true
+              {{- if $.Values.enableTracing }}
+              traces:
+                propagators:
+                  - "tracecontext"
+                  - "b3"
+                processors:
+                  - batch:
+                      exporter:
+                        otlp:
+                          protocol: grpc/protobuf
+                          endpoint: http://{{ $.Values.internalCollectorDomainName }}:4317
+              {{- end }}
+        image:
+          repository: container-registry.example.com/ghcr/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector
+        command:
+          name: "otelcol"
+        podSecurityContext:
+          seccompProfile:
+            type: RuntimeDefault
+          supplementalGroups:
+            - 100
+        securityContext:
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsGroup: 10001
+        extraEnvs:
+          - name: GOMEMLIMIT
+            valueFrom:
+              resourceFieldRef:
+                containerName: opentelemetry-collector
+                resource: requests.memory
+        extraVolumes:
+          - name: kafka
+            secret:
+              secretName: kafka-example-secret-name
+        extraVolumeMounts:
+          - name: kafka
+            readOnly: true
+            mountPath: /kafka/tls
+        ports:
+          otlp:
+            enabled: false
+          otlp-http:
+            enabled: false
+          jaeger-compact:
+            enabled: false
+          jaeger-thrift:
+            enabled: false
+          jaeger-grpc:
+            enabled: false
+          zipkin:
+            enabled: false
+          metrics:
+            enabled: true
+        useGOMEMLIMIT: false
+        resources:
+          {{- toYaml $.Values.opentelemetryCollector.resources | nindent 10 }}
+        revisionHistoryLimit: {{ $.Values.revisionHistoryLimit }}
+        serviceMonitor:
+          enabled: true
+          extraLabels:
+            release: prometheus
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ $.Values.opentelemetryCollector.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+{{- if $.Values.opentelemetryCollector.autoscaling.vertical.enabled }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.opentelemetryCollector.name "-" .team }}
+  namespace: {{ $.Values.opentelemetryCollector.namespace }}
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ print $.Values.opentelemetryCollector.name "-" .team }}
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+---
+{{- $_ := required "Environment is required" $.Values.environment }}
+{{- if ( not ( or ( eq $.Values.environment "test" ) ( eq $.Values.environment "prod" ) ) ) }}
+{{- fail "invalid value for environment, must be either 'test' or 'prod'" }}
+{{- end }}
+{{- $_ := required "Team is required in tenant" .team }}
+{{- if ( not ( regexMatch "^team-[a-z]+(?:[-][a-z]+)*$" .team ) ) }}
+{{- fail "invalid value for team, must be prefixed with 'team-' and can only contain lowercase letters eg 'team-example'" }}
+{{- end }}
+{{- end }}
+{{- $_ := required "Location is required" .Values.location }}
+{{- if ( not ( or ( eq .Values.location "examplelocationfirst" ) ( eq .Values.location "examplelocationsecond" ) ) ) }}
+{{- fail "invalid value for location, must be either 'examplelocationfirst' or 'examplelocationsecond'" }}
+{{- end }}

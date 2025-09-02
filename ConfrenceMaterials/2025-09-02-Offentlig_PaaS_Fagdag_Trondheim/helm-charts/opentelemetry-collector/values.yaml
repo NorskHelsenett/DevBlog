@@ -1,0 +1,97 @@
+config:
+  environment: ""
+  location: ""
+  team: ""
+
+logLevel: warn
+
+addK8sAttributes: false
+
+filter: {}
+
+autoscaling:
+  vertical:
+    enabled: false
+
+otlpPrometheusExporter:
+  enabled: false
+  endpoint: "http://prometheus-kube-prometheus-prometheus.prometheus-operator:9090/api/v1/otlp"
+
+opentelemetry-collector:
+  fullnameOverride: "collector"
+
+  mode: "deployment"
+
+  configMap:
+    create: false
+    existingName: collector
+    existingPath: "configmap.yaml"
+
+  ## Use the k8s release of the otel collector
+  # image:
+  #   repository: "otel/opentelemetry-collector-k8s"
+
+  ## Use the core release of the otel collector
+  # image:
+  #   repository: "container-registry.example.com/dockerhub/otel/opentelemetry-collector"
+
+  # command:
+  #   name: "otelcol"
+
+  # Use the contrib release of the otel collector
+  image:
+    repository: "container-registry.example.com/ghcr/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib"
+
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+    supplementalGroups:
+      - 100
+  securityContext:
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+    allowPrivilegeEscalation: false
+    runAsNonRoot: true
+    runAsGroup: 10001
+
+  extraVolumes:
+    - name: kafka
+      secret:
+        secretName: kafka-example-secret-name
+  extraVolumeMounts:
+    - name: kafka
+      readOnly: true
+      mountPath: /kafka/tls
+
+  ports:
+    jaeger-compact:
+      enabled: false
+    jaeger-thrift:
+      enabled: false
+    jaeger-grpc:
+      enabled: false
+    zipkin:
+      enabled: false
+    metrics:
+      enabled: true
+
+  useGOMEMLIMIT: false
+
+  revisionHistoryLimit: 1
+
+  serviceMonitor:
+    enabled: true
+    extraLabels:
+      release: prometheus
+    metricsEndpoints:
+      - port: metrics
+
+  prometheusRule:
+    enabled: true
+    defaultRules:
+      enabled: true
+    extraLabels:
+      release: prometheus

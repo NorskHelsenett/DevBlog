@@ -1,0 +1,173 @@
+storageClass: example-storage-class-name
+registry: container-registry.example.com/dockerhub
+logLevel: warn
+logFormat: json
+revisionHistoryLimit: 1
+s3Endpoint: ""
+location: examplelocationfirst
+environment: "" # test or prod
+# tenants:
+#   - team: team-example
+#     opentelemetryCollector:
+#       memory: 512Mi
+tenants: []
+bucketPrefix: ""
+enableTracing: false
+argocdProject: "default"
+consumerGroupId: "observability-stack"
+# Domain name of the opentelemetry collector that the components in this stack should send their telemetry to
+internalCollectorDomainName: "otlp-collector.opentelemetry"
+grafana:
+  # Used for giving additional roles access to organizations beyond the default set up where each team is given the Editor role for their own organization.
+  # Could be used for giving a group the Viewer role in an organization.
+  # additionalOrgMappings:
+  #   - "team-first-example:team-second-example:Editor"
+  additionalOrgMappings: []
+  name: grafana
+  namespace: grafana
+  publish: false
+  fqdn: ""
+  ingressClassName: example-ingress-class-name
+  ingress:
+    extraAnnotations: {}
+  plugins:
+    - volkovlabs-echarts-panel
+    - grafana-lokiexplore-app
+    - grafana-exploretraces-app
+  persistence:
+    readWriteMany: false
+  resources: {}
+  autoscaling:
+    vertical:
+      enabled: false
+loki:
+  name: loki
+  namespace: loki
+  retention: 336h
+  canary:
+    resources: {}
+  chunksCache:
+    replicas: 9
+  compactor:
+    resources: {}
+  distributor:
+    resources: {}
+  gateway:
+    resources: {}
+  indexGateway:
+    resources: {}
+  ingester:
+    replicas: 9
+    resources: {}
+  memcachedExporter:
+    resources: {}
+  querier:
+    resources: {}
+  queryFrontend:
+    resources: {}
+  queryScheduler:
+    resources: {}
+  resultsCache:
+    replicas: 9
+  ruler:
+    resources: {}
+  useGateway: true
+  cache:
+    memoryMiB: 512
+  autoscaling:
+    vertical:
+      enabled: false
+mimir:
+  name: mimir
+  namespace: mimir
+  retention: 336h
+  useGateway: true
+  alertmanager:
+    resources: {}
+  chunksCache:
+    replicas: 9
+  compactor:
+    persistentVolume:
+      size: 30Gi
+    resources: {}
+  distributor:
+    resources: {}
+  gateway:
+    resources: {}
+  indexCache:
+    replicas: 9
+  ingester:
+    persistentVolume:
+      size: 25Gi
+    replicas: 9
+    resources: {}
+  memcachedExporter:
+    resources: {}
+  metadataCache:
+    replicas: 9
+  overridesExporter:
+    resources: {}
+  querier:
+    replicas: 9
+    resources: {}
+  queryFrontend:
+    resources: {}
+  queryScheduler:
+    resources: {}
+  resultsCache:
+    replicas: 9
+  ruler:
+    resources: {}
+  storeGateway:
+    replicas: 9
+    resources: {}
+  autoscaling:
+    vertical:
+      enabled: false
+tempo:
+  name: tempo
+  namespace: tempo
+  retention: 336h
+  useGateway: false
+  compactor:
+    replicas: 9
+    resources: {}
+  distributor:
+    resources: {}
+  ingester:
+    replicas: 9
+    resources: {}
+  memcachedExporter:
+    resources: {}
+  metricsGenerator:
+    resources: {}
+  querier:
+    replicas: 9
+    resources: {}
+  queryFrontend:
+    resources: {}
+    metrics:
+      queryBackendAfter: 30m
+  autoscaling:
+    vertical:
+      enabled: false
+opentelemetryCollector:
+  name: collector
+  namespace: opentelemetry
+  resources: {}
+  autoscaling:
+    vertical:
+      enabled: false
+prometheusAdapter:
+  enabled: true
+  name: prometheus-adapter
+  namespace: prometheus-adapter
+  resources: {}
+  autoscaling:
+    vertical:
+      enabled: false
+grafanaProvisioner:
+  enabled: true
+  name: grafana-provisioner
+  namespace: grafana-provisioner
+  environment: Development

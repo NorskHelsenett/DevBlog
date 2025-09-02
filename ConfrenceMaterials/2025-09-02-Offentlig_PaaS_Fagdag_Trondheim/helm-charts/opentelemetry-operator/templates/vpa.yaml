@@ -1,0 +1,53 @@
+{{- if .Values.autoscaling.vertical.enabled }}
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: operator
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: operator
+  updatePolicy:
+    updateMode: "Auto"
+{{- if .Values.clusterCollector.enabled }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: cluster-collector
+spec:
+  targetRef:
+    apiVersion: "opentelemetry.io/v1beta1"
+    kind: OpenTelemetryCollector
+    name: cluster
+  updatePolicy:
+    updateMode: "Auto"
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: cluster-targetallocator
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: cluster-targetallocator
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+{{- if .Values.otlpCollector.enabled }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: otlp-collector
+spec:
+  targetRef:
+    apiVersion: "opentelemetry.io/v1beta1"
+    kind: OpenTelemetryCollector
+    name: otlp
+  updatePolicy:
+    updateMode: "Auto"
+{{- end }}
+{{- end }}

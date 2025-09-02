@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "grafana-provisioner.fullname" . }}
+  labels:
+    {{- include "grafana-provisioner.labels" . | nindent 4 }}
+data:
+  ENVIRONMENT: {{ .Values.environment | quote }}
+  GRAFANA_URL: {{ .Values.grafanaUrl | default "http://grafana.grafana.svc:3000" | quote }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.opentelemetryCollectorEndpoint | default "http://collector.opentelemetry.svc:4318" | quote }}
+  OTEL_METRICS_EXEMPLAR_FILTER: "trace_based"
+
+{{- if .Values.organizations }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config
+  labels:
+    {{- include "grafana-provisioner.labels" . | nindent 4 }}
+data:
+  config.json: |
+    {
+      "organizations": {{ toPrettyJson .Values.organizations | nindent 8 }},
+      "dataSources": [
+        {
+          "uid": "alertmanager",
+          "name": "Alertmanager",
+          "type": "alertmanager",
+          "access": "proxy",
+          "url": "http://mimir-gateway.mimir.svc:80",
+          "isDefault": false,
+          "jsonData": {
+            "handleGrafanaManagedAlerts": true,
+            "httpHeaderName1": "X-Scope-OrgID",
+            "implementation": "mimir",
+            "tlsSkipVerify": false
+          }
+        },
+        {
+          "uid": "loki",
+          "name": "Loki",
+          "type": "loki",
+          "access": "proxy",
+          "url": "http://loki-gateway.loki.svc:80",
+          "isDefault": true,
+          "jsonData": {
+            "derivedFields": [
+              {
+                "datasourceUid": "tempo",
+                "matcherRegex": "trace_id",
+                "matcherType": "label",
+                "name": "trace_id",
+                "url": "${__value.raw}"
+              },
+              {
+                "datasourceUid": "tempo",
+                "matcherRegex": "TraceId",
+                "matcherType": "label",
+                "name": "TraceId",
+                "url": "${__value.raw}"
+              }
+            ],
+            "httpHeaderName1": "X-Scope-OrgID",
+            "maxLines": 100,
+            "tlsSkipVerify": false
+          }
+        },
+        {
+          "uid": "mimir",
+          "name": "Mimir",
+          "type": "prometheus",
+          "access": "proxy",
+          "url": "http://mimir-gateway.mimir.svc:80/prometheus",
+          "isDefault": false,
+          "jsonData": {
+            "cacheLevel": "Low",
+            "exemplarTraceIdDestinations": [
+              {
+                "datasourceUid": "Tempo",
+                "name": "trace_id"
+              }
+            ],
+            "httpHeaderName1": "X-Scope-OrgID",
+            "httpMethod": "POST",
+            "prometheusType": "Mimir",
+            "prometheusVersion": "2.9.1",
+            "timeInterval": "30s"
+          }
+        },
+        {
+          "uid": "tempo",
+          "name": "Tempo",
+          "type": "tempo",
+          "access": "proxy",
+          "url": "http://tempo-gateway.tempo.svc:80",
+          "isDefault": false,
+          "jsonData": {
+            "httpHeaderName1": "X-Scope-OrgID",
+            "httpMethod": "GET",
+            "lokiSearch": {
+              "datasourceUid": "loki"
+            },
+            "nodeGraph": {
+              "enabled": true
+            },
+            "search": {
+              "filters": [
+                {
+                  "id": "service-name",
+                  "operator": "=",
+                  "scope": "resource",
+                  "tag": "service.name"
+                },
+                {
+                  "id": "span-name",
+                  "operator": "=",
+                  "scope": "span",
+                  "tag": "name"
+                }
+              ],
+              "hide": false
+            },
+            "serviceMap": {
+              "datasourceUid": "mimir"
+            },
+            "spanBar": {
+              "tag": "url.path",
+              "type": ""
+            },
+            "tracesToLogsV2": {
+              "customQuery": true,
+              "datasourceUid": "loki",
+              "filterBySpanID": false,
+              "filterByTraceID": true,
+              "query": "{${__tags}} | trace_id=\"${__trace.traceId}\"",
+              "spanEndTimeShift": "30s",
+              "spanStartTimeShift": "-30s",
+              "tags": [
+                {
+                  "key": "service.name",
+                  "value": "service_name"
+                }
+              ]
+            },
+            "tracesToMetrics": {
+              "queries": [],
+              "tags": []
+            }
+          }
+        }
+      ],
+      "folders": [
+        {
+          "title": "Felles",
+          "uid": "felles"
+        }
+      ],
+      "dashboards": [
+        {
+          "dashboard": {
+            "title": "Test",
+            "uid": "test"
+          },
+          "folderUid": "felles"
+        }
+      ]
+    }
+    {{- end }}
