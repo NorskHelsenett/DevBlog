@@ -1,0 +1,140 @@
+networks:
+  apps_network:
+    name: apps_network
+    external: true
+
+services:
+  address-downloader:
+    # Because you end up downloading 140 MiB zip, which gives 700MiB CSV, and adds 3GB parsed data when triplicated in Kafka, don't run by default always
+    # To run it, do `docker compose --profile full-init up -d --build`
+    # profiles:
+    #   - full-init
+    image: localhost/address-downloader
+    networks:
+      - apps_network
+    user: 1000:1001
+    build:
+      context: AddressDownloader
+      dockerfile: Dockerfile
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/address-downloader:/kafka/secrets
+      # - type: tmpfs
+      #   target: /tmp/workdir
+      #   tmpfs:
+      #     mode: 01777
+      - ../ContainerData/AddressDownloaderWorkDir:/tmp/workdir
+    environment:
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      # LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      ADDRESS_DOWNLOADER_CSV_URL: "https://nedlasting.geonorge.no/geonorge/Basisdata/MatrikkelenVegadresse/CSV/Basisdata_0000_Norge_4258_MatrikkelenVegadresse_CSV.zip"
+      ADDRESS_DOWNLOADER_WORK_DIR_RW: "/tmp/workdir"
+      ADDRESS_DOWNLOADER_EXPECTED_ZIP_FILE_NAME: "Basisdata_0000_Norge_4258_MatrikkelenVegadresse_CSV.zip"
+      ADDRESS_DOWNLOADER_EXPECTED_CSV_FILE_NAME: "matrikkelenVegadresse.csv"
+      ADDRESS_DOWNLOADER_CSV_FIELD_DELIMITER: ";"
+      ADDRESS_DOWNLOADER_KAFKA_TOPIC: "cadastre-matrikkel-vegadresse-raw"
+
+      # kafkal config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+      # KAFKA_GROUP_ID: "address-refiner-group"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "AddressDownloader"
+      DEPLOYMENT_ENVIRONMENT: "dev-laptop"
+
+  address-refiner:
+    image: localhost/address-refiner
+    networks:
+      - apps_network
+    ports:
+      - "4080:80"
+    user: 1000:1001
+    build:
+      context: AddressRefiner
+      dockerfile: Dockerfile
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/address-refiner:/kafka/secrets
+    environment:
+      ASPNETCORE_URLS: "http://+:80"
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      ADDRESS_REFINER_KAFKA_TOPIC_RAW_ADDRESSES: "cadastre-matrikkel-vegadresse-raw"
+      ADDRESS_REFINER_KAFKA_TOPIC_REFINED_ADDRESSES: "cadastre-matrikkel-vegadresse-processed"
+
+      # kafkal config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all" # ~ 8µs
+      # KAFKA_ACKS: "leader" # ~35ms
+      # KAFKA_ACKS: "none" # ~5ms
+      KAFKA_GROUP_ID: "address-refiner-group"
+      KAFKA_CLIENT_ID: "the-bestest-refiner-instance"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "false"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "AddressRefiner"
+      DEPLOYMENT_ENVIRONMENT: "dev-laptop"
+
+  address-web-api:
+    image: localhost/address-web-api
+    networks:
+      - apps_network
+    ports:
+      - "4081:80"
+    user: 1000:1001
+    build:
+      context: AddressWebApi
+      dockerfile: Dockerfile
+    volumes:
+      # - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData/GeneratedCerts/Kafka/Users/address-web-api:/kafka/secrets
+    environment:
+      ASPNETCORE_URLS: "http://+:80"
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      ADDRESS_WEB_API_KAFKA_TOPIC_REFINED_ADDRESSES: "cadastre-matrikkel-vegadresse-processed"
+      ADDRESS_WEB_API_QUERY_NUMBER_OF_RESULTS_LIMIT: "0"
+      ADDRESS_WEB_API_QUERY_TIMEOUT_MS: "5000"
+
+      # kafka config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_GROUP_ID: "address-web-api-group"
+      KAFKA_CLIENT_ID: "the-bestest-web-api-instance"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "false"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "AddressWebApi"
+      DEPLOYMENT_ENVIRONMENT: "dev-laptop"

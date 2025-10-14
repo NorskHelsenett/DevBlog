@@ -1,0 +1,197 @@
+curl -w '\n' http://localhost:4081/healthz/ready
+
+###
+
+curl -w '\n' --header "Content-Type: application/json" --request POST --data '{"filters":[{"field": "AddressId", "value": "11719375", "criteria": "Equals"}],"requestedFields":["AddressId","AddressText","North","East"]}' http://localhost:4081/query
+
+###
+
+curl -w '\n' --header "Content-Type: application/json" --request POST --data '{"filters":[{"field": "AddressName", "value": "Trondheimsveien", "criteria": "equals"}],"requestedFields":["AddressId","AddressText","North","East","MunicipalityNumber","MunicipalityName"]}' http://localhost:4081/query
+
+###
+
+POST http://localhost:4081/query HTTP/1.1
+Content-Type: application/json
+
+{
+    "filters":
+    [
+        {"field": "AddressId", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressUuid", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressCode", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressType", "value": "", "criteria": "DoesntEqual"},
+        {"field": "UpdateDate", "value": "", "criteria": "DoesntEqual"},
+        {"field": "MunicipalityNumber", "value": "", "criteria": "DoesntEqual"},
+        {"field": "MunicipalityName", "value": "", "criteria": "DoesntEqual"},
+        {"field": "CadastralUnitNumber", "value": "", "criteria": "DoesntEqual"},
+        {"field": "PropertyUnitNumber", "value": "", "criteria": "DoesntEqual"},
+        {"field": "LeaseNumber", "value": "", "criteria": "DoesntEqual"},
+        {"field": "SubNumber", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressAdditionalName", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressName", "value": "", "criteria": "DoesntEqual"},
+        {"field": "Number", "value": "", "criteria": "DoesntEqual"},
+        {"field": "Letter", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressText", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AddressTextWithoutAddressAdditionalName", "value": "", "criteria": "DoesntEqual"},
+        {"field": "PostalCode", "value": "", "criteria": "DoesntEqual"},
+        {"field": "PostalCity", "value": "", "criteria": "DoesntEqual"},
+        {"field": "EpsgCode", "value": "", "criteria": "DoesntEqual"},
+        {"field": "North", "value": "", "criteria": "DoesntEqual"},
+        {"field": "East", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessId", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessUuid", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessNorth", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessSouth", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessSummerId", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessSummerUuid", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessSummerNorth", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessSummerEast", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterId", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterUuid", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterNorth", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterEast", "value": "", "criteria": "DoesntEqual"}
+    ],
+    "requestedFields":
+    [
+        "AddressId",
+        "AddressUuid",
+        "AddressCode",
+        "AddressType",
+        "UpdateDate",
+        "MunicipalityNumber",
+        "MunicipalityName",
+        "CadastralUnitNumber",
+        "PropertyUnitNumber",
+        "LeaseNumber",
+        "SubNumber",
+        "AddressAdditionalName",
+        "AddressName",
+        "Number",
+        "Letter",
+        "AddressText",
+        "AddressTextWithoutAddressAdditionalName",
+        "PostalCode",
+        "PostalCity",
+        "EpsgCode",
+        "North",
+        "East",
+        "AccessId",
+        "AccessUuid",
+        "AccessNorth",
+        "AccessSouth",
+        "AccessSummerId",
+        "AccessSummerUuid",
+        "AccessSummerNorth",
+        "AccessSummerEast",
+        "AccessWinterId",
+        "AccessWinterUuid",
+        "AccessWinterNorth",
+        "AccessWinterEast"
+    ]
+}
+
+###
+
+POST http://localhost:4081/query HTTP/1.1
+Content-Type: application/json
+
+{
+    "filters":
+    [
+        {"field": "AccessWinterId", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterUuid", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterNorth", "value": "", "criteria": "DoesntEqual"},
+        {"field": "AccessWinterEast", "value": "", "criteria": "DoesntEqual"}
+    ],
+    "requestedFields":
+    [
+        "AddressId",
+        "AddressUuid",
+        "AddressCode",
+        "AddressType",
+        "UpdateDate",
+        "MunicipalityNumber",
+        "MunicipalityName",
+        "CadastralUnitNumber",
+        "PropertyUnitNumber",
+        "LeaseNumber",
+        "SubNumber",
+        "AddressAdditionalName",
+        "AddressName",
+        "Number",
+        "Letter",
+        "AddressText",
+        "AddressTextWithoutAddressAdditionalName",
+        "PostalCode",
+        "PostalCity",
+        "EpsgCode",
+        "North",
+        "East",
+        "AccessId",
+        "AccessUuid",
+        "AccessNorth",
+        "AccessSouth",
+        "AccessSummerId",
+        "AccessSummerUuid",
+        "AccessSummerNorth",
+        "AccessSummerEast",
+        "AccessWinterId",
+        "AccessWinterUuid",
+        "AccessWinterNorth",
+        "AccessWinterEast"
+    ]
+}
+
+
+###
+
+POST http://localhost:4081/query HTTP/1.1
+Content-Type: application/json
+
+{
+    "filters":
+    [
+        {"field": "MunicipalityNumber", "value": "5001", "criteria": "Equals"},
+        {"field": "MunicipalityName", "value": "TRONDHEIM", "criteria": "Equals"},
+        {"field": "addressText", "value": "Abels gate 9", "criteria": "Equals"},
+        {"field": "PostalCode", "value": "7030", "criteria": "Equals"},
+        {"field": "postalCity", "value": "TRONDHEIM", "criteria": "Equals"}
+    ],
+    "requestedFields":
+    [
+        "AddressId",
+        "AddressUuid",
+        "AddressCode",
+        "AddressType",
+        "UpdateDate",
+        "MunicipalityNumber",
+        "MunicipalityName",
+        "CadastralUnitNumber",
+        "PropertyUnitNumber",
+        "LeaseNumber",
+        "SubNumber",
+        "AddressAdditionalName",
+        "AddressName",
+        "Number",
+        "Letter",
+        "AddressText",
+        "AddressTextWithoutAddressAdditionalName",
+        "PostalCode",
+        "PostalCity",
+        "EpsgCode",
+        "North",
+        "East",
+        "AccessId",
+        "AccessUuid",
+        "AccessNorth",
+        "AccessSouth",
+        "AccessSummerId",
+        "AccessSummerUuid",
+        "AccessSummerNorth",
+        "AccessSummerEast",
+        "AccessWinterId",
+        "AccessWinterUuid",
+        "AccessWinterNorth",
+        "AccessWinterEast"
+    ]
+}

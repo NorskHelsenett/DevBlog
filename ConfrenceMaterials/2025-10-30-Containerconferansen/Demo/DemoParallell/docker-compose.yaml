@@ -1,0 +1,59 @@
+networks:
+  apps_network:
+    name: apps_network
+    external: true
+
+services:
+  dc1:
+    image: localhost/distributed-cache-demo
+    networks:
+      - apps_network
+    user: 1000:1001
+    build:
+      context: DistributedCache
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/distributed-cache:/kafka/secrets
+      # - type: tmpfs
+      #   target: /tmp/workdir
+      #   tmpfs:
+      #     mode: 01777
+      - ../ContainerData/DistributedCacheWorkDir/c1:/tmp/workdir
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      # LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      DISTRIBUTED_CACHE_STORAGE_INBOX_KIND: "sqlite" # memory, sqlite
+      DISTRIBUTED_CACHE_STORAGE_INBOX_SQLITE_MODE: "memory" # file, memory
+      DISTRIBUTED_CACHE_STORAGE_INBOX_SQLITE_FILE_LOCATION: "/tmp/workdir/outbox.sqlite"
+      DISTRIBUTED_CACHE_STORAGE_OUTBOX_KIND: "sqlite" # memory, sqlite
+      DISTRIBUTED_CACHE_STORAGE_OUTBOX_SQLITE_MODE: "memory" # file, memory
+      DISTRIBUTED_CACHE_STORAGE_OUTBOX_SQLITE_FILE_LOCATION: "/tmp/workdir/inbox.sqlite"
+      DISTRIBUTED_CACHE_DISTRIBUTION_KAFKA_PRODUCE_ASYNC: "false"
+      DISTRIBUTED_CACHE_KAFKA_TOPIC: "distributed-cache"
+      DISTRIBUTED_CACHE_OUTBOX_INTERVAL_MS: "100"
+
+      # kafkal config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+      KAFKA_GROUP_ID: "distributed-cache-group"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "DistributedCache1"
+      DEPLOYMENT_ENVIRONMENT: "dev-laptop"

@@ -1,0 +1,70 @@
+@baseurl=http://localhost:8080
+
+###
+# Check if we're up, running, and healthy
+
+GET {{baseurl}}/healthz/ready
+
+###
+
+GET {{baseurl}}/healthz/live
+
+###
+
+GET {{baseurl}}/healthz
+
+###
+# Add data that gets published on kafka
+
+POST {{baseurl}}/store
+Content-Type: application/json
+X-Correlation-Id: {{$guid}}
+
+{
+    "Key": "helloFirst",
+    "Value": "dGhlc2UgYXJlIGJ5dGVz",
+    "ValueComment": "these are bytes",
+    "Headers": [
+        {"Key": "a", "Value": "1"},
+        {"Key": "b", "Value": "2"}
+    ]
+}
+
+###
+# Add data that gets published on kafka
+
+POST {{baseurl}}/store
+Content-Type: application/json
+X-Correlation-Id: {{$guid}}
+
+{
+    "Key": "helloFirst",
+    "Value": "dGhlc2UgYXJlIGJ5dGVz",
+    "ValueComment": "these are bytes",
+    "Headers": [
+        {"a": "1"},
+        {"b": "2"}
+    ]
+}
+
+###
+# Retrieve event consumed from kafka
+
+POST {{baseurl}}/retrieve
+Content-Type: application/json
+
+{
+    "Key": "helloFirst"
+}
+
+###
+
+# Remove event from kafka and storage downstream
+POST {{baseurl}}/remove
+Content-Type: application/json
+
+{
+    "Id": "helloFirst"
+}
+
+###

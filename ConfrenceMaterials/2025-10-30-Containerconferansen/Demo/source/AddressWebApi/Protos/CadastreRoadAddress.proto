@@ -1,0 +1,75 @@
+syntax = "proto3";
+/* Based on Kartverkets cadastre (land register/matrikkel) road address data. */
+package no.nhn.address.cadastre.road;
+option java_package = "no.nhn.address.cadastre.road";
+option csharp_namespace = "No.Nhn.Address.Cadastre.Road";
+
+message CadastreRoadAddress {
+  /* adresseId = lokalId 1:1 uuidAdresse */
+  string AddressId = 1;
+  string AddressUuid = 2;
+  /* adressekode (e.g. "1036", "1244") */
+  string AddressCode = 3;
+  /* adressetype (e.g. "vegadresse", "matrikkeladresse")*/
+  string AddressType = 4;
+  /* oppdateringsdato */
+  string UpdateDate = 5;
+  /* kommunenummer */
+  string MunicipalityNumber = 6;
+  /* kommunenavn */
+  string MunicipalityName = 7;
+  /* gardsnummer */
+  string CadastralUnitNumber = 8;
+  /* bruksnummer */
+  string PropertyUnitNumber = 9;
+  /* festenummer */
+  string LeaseNumber = 10;
+  /* undernummer */
+  string SubNumber = 11;
+  /* adressetilleggsnavn (stedsnavn, e.g. "Smånipevegen", "Hytte Nr. 5-248" */
+  string AddressAdditionalName = 12;
+  /* adressenavn (e.g. "Fjordalléen" ) */
+  string AddressName = 13;
+  /* nummer */
+  string Number = 14;
+  /* bokstav */
+  string Letter = 15;
+  /* adresseTekst */
+  string AddressText = 16;
+  /* adresseTekstUtenAdressetilleggsnavn */
+  string AddressTextWithoutAddressAdditionalName = 17;
+  /* postnummer */
+  string PostalCode = 18;
+  /* poststed */
+  string PostalCity = 19;
+  /* EPSG-kode */
+  string EpsgCode = 20;
+  /* Nord */
+  string North = 21;
+  /* Øst */
+  string East = 22;
+  /* atkomstId */
+  string AccessId = 23;
+  /* uuidAtkomst */
+  string AccessUuid = 24;
+  /* atkomstNord */
+  string AccessNorth = 25;
+  /* atkomstØst */
+  string AccessSouth = 26;
+  /* sommeratkomstId */
+  string AccessSummerId = 27;
+  /* uuidSommeratkomst */
+  string AccessSummerUuid = 28;
+  /* sommeratkomstNord */
+  string AccessSummerNorth = 29;
+  /* sommeratkomstØst */
+  string AccessSummerEast = 30;
+  /* vinteratkomstId */
+  string AccessWinterId = 31;
+  /* uuidVinteratkomst */
+  string AccessWinterUuid = 32;
+  /* vinteratkomstNord */
+  string AccessWinterNorth = 33;
+  /* vinteratkomstØst */
+  string AccessWinterEast = 34;
+}

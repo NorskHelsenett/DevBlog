@@ -1,0 +1,1682 @@
+networks:
+  controllers_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.21.82.0/24"
+        - subnet: "2001:2181:2181::/64"
+  brokers_network:
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.90.92.0/24"
+        - subnet: "2001:9092:9092::/64"
+  apps_network:
+    attachable: true
+    name: apps_network
+    ipam:
+      driver: default
+      config:
+        - subnet: "172.80.80.0/24"
+        - subnet: "2001:8080:8080::/64"
+
+services:
+  set-up-container-mount-area:
+    image: debian:stable-slim
+    user: 1000:1001
+    container_name: set-up-container-mount-area
+    volumes:
+      - .:/ProjectDir
+    environment:
+      RESET_EVERYTHING: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo '====== Creating Containers Working Directories with gitignore ========='
+        if [ ''$$RESET_EVERYTHING == 'true' ]; then
+          echo 'WARNING: Wiping ALL container data, certificates, everything, and starting fresh!'
+          rm -rf /ProjectDir/ContainerData
+        fi
+
+        mkdir -p /ProjectDir/ContainerData
+
+        if [ ! -f /ProjectDir/ContainerData/.gitignore ]; then
+          echo 'Creating gitignore so that you dont accidentaly check in container data'
+          echo 'If you want some of the container data checked in, simply add an exception to the gitignore'
+          printf '%s\n' '*' '#!.gitignore' > /ProjectDir/ContainerData/.gitignore
+        fi
+
+        echo 'Creating folders for persisting kafka state between runs'
+        mkdir -p /ProjectDir/ContainerData/Kafka
+
+        echo 'Creating folders for persisting kafka brokers state between runs'
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker1
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker1/Data
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker2
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker2/Data
+
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker3
+        mkdir -p /ProjectDir/ContainerData/Kafka/Brokers/Broker3/Data
+
+        echo 'Creating directory for persisting apicurio schema registry state between runs'
+        mkdir -p /ProjectDir/ContainerData/Apicurio
+
+        mkdir -p /ProjectDir/ContainerData/AddressDownloaderWorkDir
+        mkdir -p /ProjectDir/ContainerData/DistributedCacheWorkDir
+        mkdir -p /ProjectDir/ContainerData/DistributedCacheWorkDir/c1
+        mkdir -p /ProjectDir/ContainerData/DistributedCacheWorkDir/c2
+        mkdir -p /ProjectDir/ContainerData/DistributedCacheWorkDir/c3
+
+        mkdir -p /ProjectDir/ContainerData/OtelGrafana/tempo/data
+        mkdir -p /ProjectDir/ContainerData/OtelGrafana/grafana/data
+        mkdir -p /ProjectDir/ContainerData/OtelGrafana/loki/data
+        mkdir -p /ProjectDir/ContainerData/OtelGrafana/loki/storage
+        mkdir -p /ProjectDir/ContainerData/OtelGrafana/prometheus/data
+        mkdir -p /ProjectDir/ContainerData/OtelGrafana/pyroscope/data
+
+        echo '====== Done Creating Containers Working Directories with gitignore ===='
+
+  create-certificate-authority:
+    image: localhost/cert-creator:latest
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-certificate-authority
+    depends_on:
+      set-up-container-mount-area:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    volumes:
+      - ./ContainerData:/ContainerData
+    environment:
+      RECREATE_IF_EXISTS: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo '================ Setting Up Variables ============================='
+        ENV_NAME='lokalmaskin'
+        VALIDITY_DAYS='365'
+        # Default to 2048, because 4096 is noticeably slow to humans, and default mode here is demo
+        RSA_BITS='2048'
+        CERT_PASSWORD_LENGTH='32'
+        # Add unique component we can use in CN to ease ca rotation
+        UNIQUE_ENOUGH_STRING=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+        CA_PASSWORD_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/password.txt'
+        CA_KEY_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/ca.key'
+        CA_CRT_FILE_NAME='ca.crt'
+        CA_CRT_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/'$$CA_CRT_FILE_NAME
+        echo '================ Done Setting Up Variables ========================'
+
+        if [ -f $$CA_CRT_PATH ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
+          echo 'CA CRT file exists, and recreation not set to true, exiting without creating CA'
+          exit 0
+        fi
+
+        echo '================ Creating CA ======================================'
+        rm -rf /ContainerData/GeneratedCerts/CertificateAuthority
+        mkdir -p /ContainerData/GeneratedCerts/CertificateAuthority
+        cd /ContainerData/GeneratedCerts/CertificateAuthority
+
+        CA_PASSWORD=$(tr -dc 'A-Za-z0-9!$%&()*+,-./<>?@[\]^_{|}~' </dev/urandom | head -c $$CERT_PASSWORD_LENGTH; echo)
+        # CA_PASSWORD=This_is_guaranteed_to_work!1
+
+        echo $$CA_PASSWORD > $$CA_PASSWORD_PATH
+
+        # echo 'The generated password of the day is:'
+        # cat '$$CA_PASSWORD_PATH'
+        # # echo 'the variable was'
+        # # echo $$CA_PASSWORD
+        # echo 'END The generated password of the day'
+
+        openssl req \
+          -new \
+          -x509 \
+          -keyout $$CA_KEY_PATH \
+          -newkey 'rsa:'$$RSA_BITS \
+          -out $$CA_CRT_PATH \
+          -days $$VALIDITY_DAYS \
+          -subj '/CN=ca-'$$ENV_NAME'-'$$UNIQUE_ENOUGH_STRING'.example.com' \
+          -passin pass:$$CA_PASSWORD \
+          -passout file:$$CA_PASSWORD_PATH 2> /dev/null
+
+        echo '================ Done Creating CA ================================='
+
+  create-certificates-for-brokers:
+    image: localhost/cert-creator:latest
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-certificates-for-brokers
+    depends_on:
+      create-certificate-authority:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    volumes:
+      - ./ContainerData:/ContainerData
+    environment:
+      RECREATE_IF_EXISTS: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        if [ -f /ContainerData/GeneratedCerts/Kafka/Brokers/broker1/acl-principal.pfx ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
+          echo 'Because Broker1s PFX file exists assuming that all other broker certs also exist, and recreation not set to true, exiting without creating any certs'
+          exit 0
+        fi
+        echo '================ Setting Up Variables ============================='
+        ENV_NAME='lokalmaskin'
+        VALIDITY_DAYS='365'
+        # Default to 2048, because 4096 is noticeably slow to humans, and default mode here is demo
+        RSA_BITS='2048'
+        CERT_PASSWORD_LENGTH='32'
+        USE_DEMO_PASSWORDS='true'
+
+        CA_PASSWORD_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/password.txt'
+        CA_KEY_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/ca.key'
+        CA_CRT_FILE_NAME='ca.crt'
+        CA_CRT_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/'$$CA_CRT_FILE_NAME
+
+        echo '================ Done Setting Up Variables ========================'
+
+        function CreateBrokereAcl {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --dns1*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_DNS_1="$${1#*=}"
+                ;;
+              --dns2*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_DNS_2="$${1#*=}"
+                ;;
+              --dns3*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_DNS_3="$${1#*=}"
+                ;;
+              --ip_brokers_network_v4*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_BROKERS_NETWORK_IPV4="$${1#*=}"
+                ;;
+              --ip_brokers_nettwork_v6*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_BROKERS_NETWORK_IPV6="$${1#*=}"
+                ;;
+              --ip_controllers_network_v4*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_CONTROLLERS_NETWORK_IPV4="$${1#*=}"
+                ;;
+              --ip_controllers_network_v6*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_CONTROLLERS_NETWORK_IPV6="$${1#*=}"
+                ;;
+              --ip_apps_network_v4*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_APPS_NETWORK_IPV4="$${1#*=}"
+                ;;
+              --ip_apps_network_v6*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                BROKER_IP_APPS_NETWORK_IPV6="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+
+          # This being fixed/shared between all enables 1 acl for all brokers
+          local BROKERS_CN='broker'
+
+          echo "Cleaning and setting up folder structure for $$BROKER_DNS_1 certificate"
+          rm -rf /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1
+          mkdir -p /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1
+          pushd /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1
+
+          echo "Setting up password for $$BROKER_DNS_1 certificate"
+          local BROKER_DEMO_PASSWORD=$(tr -dc 'A-Za-z0-9!$%&()*+,-./<>?@[\]^_{|}~' </dev/urandom | head -c $$CERT_PASSWORD_LENGTH; echo)
+          if [ ''$$USE_DEMO_PASSWORDS == 'true' ]; then
+            echo "WARNING: Setting up local demo password for $$BROKER_DNS_1 certificate"
+            BROKER_DEMO_PASSWORD='Broker_demo_password'
+          fi
+          echo $$BROKER_DEMO_PASSWORD > "/ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/password.txt"
+
+          echo "Creating private key for $$BROKER_DNS_1 certificate"
+          openssl genrsa \
+            -passout file:/ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/password.txt \
+            -aes256 \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.key $$RSA_BITS
+
+          echo "Creating certificate signing request config for $$BROKER_DNS_1 certificate"
+          printf '%s\n' \
+            '[req]' \
+            'default_bits = '$$RSA_BITS \
+            'prompt = no' \
+            'default_md = sha512' \
+            'distinguished_name = req_distinguished_name' \
+            'x509_extensions = v3_req' \
+            '' \
+            '[req_distinguished_name]' \
+            '' \
+            '[v3_req]' \
+            'basicConstraints=CA:FALSE' \
+            'subjectAltName = @alt_names' \
+            '' \
+            '[alt_names]' \
+            'DNS.1 = '$$BROKER_DNS_1 \
+            'DNS.2 = '$$BROKER_DNS_2 \
+            'DNS.3 = '$$BROKER_DNS_3 \
+            'IP.1 = '$$BROKER_IP_BROKERS_NETWORK_IPV4 \
+            'IP.2 = '$$BROKER_IP_BROKERS_NETWORK_IPV6 \
+            'IP.3 = '$$BROKER_IP_CONTROLLERS_NETWORK_IPV4 \
+            'IP.4 = '$$BROKER_IP_CONTROLLERS_NETWORK_IPV6 \
+            'IP.5 = '$$BROKER_IP_APPS_NETWORK_IPV4 \
+            'IP.6 = '$$BROKER_IP_APPS_NETWORK_IPV6 > /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr.config
+
+          echo "Creating certificate signing request for $$BROKER_DNS_1 certificate"
+          openssl req \
+            -new \
+            -key /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.key \
+            -passin pass:$$BROKER_DEMO_PASSWORD \
+            -subj '/CN='$$BROKERS_CN \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr \
+            -config /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr.config
+
+          echo "Creating and signing certificate for $$BROKER_DNS_1"
+          openssl x509 \
+            -req \
+            -CA $$CA_CRT_PATH \
+            -CAkey $$CA_KEY_PATH \
+            -passin file:$$CA_PASSWORD_PATH \
+            -in /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.crt \
+            -days $$VALIDITY_DAYS \
+            -CAcreateserial \
+            -extensions v3_req \
+            -extfile /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.csr.config
+
+          echo "Creating pkcs12 certificate bundle for $$BROKER_DNS_1"
+          openssl pkcs12 \
+            -inkey /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.key \
+            -in /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.crt \
+            -passin pass:$$BROKER_DEMO_PASSWORD \
+            -passout pass:$$BROKER_DEMO_PASSWORD \
+            -export \
+            -out /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/acl-principal.pfx
+
+          echo "Copying CA certificate/public key to $$BROKER_DNS_1 folder"
+          cp $$CA_CRT_PATH /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/
+
+          echo "Creating bootstrap config file for $$BROKER_DNS_1"
+          printf '%s\n' \
+            'security.protocol=SSL' \
+            'ssl.keystore.location=acl-principal.pfx' \
+            'ssl.keystore.password='$$BROKER_DEMO_PASSWORD \
+            'ssl.keystore.type=PKCS12' \
+            'ssl.truststore.type=PEM' \
+            'ssl.truststore.location='$$CA_CRT_FILE_NAME > /ContainerData/GeneratedCerts/Kafka/Brokers/$$BROKER_DNS_1/bootstrap.conf
+
+          popd
+        }
+
+        # For each zookeeper and broker, specify the addresses it's supposed to answer on, so that it may present a vaild identity for the endpoint.
+        # If you need names, like for docker compose/kubernetes internal networks or urls, like broker1 or broker1.kafka.example.com, put them in a DNS alt name in your certificate signing request config.
+        # If your clients use IP addresses for finding their bootstrap servers, put them in an IP alt name.
+
+        CreateBrokereAcl --dns1 "broker1" \
+          --dns2 "broker1.$$ENV_NAME" \
+          --dns3 "localhost" \
+          --ip_brokers_network_v4 "172.90.92.11" \
+          --ip_brokers_nettwork_v6 "2001:9092:9092::11" \
+          --ip_controllers_network_v4 "172.21.82.21" \
+          --ip_controllers_network_v6 "2001:2181:2181::21" \
+          --ip_apps_network_v4 "172.80.80.11" \
+          --ip_apps_network_v6 "2001:8080:8080::11"
+
+        CreateBrokereAcl --dns1 "broker2" \
+          --dns2 "broker2.$$ENV_NAME" \
+          --dns3 "localhost" \
+          --ip_brokers_network_v4 "172.90.92.12" \
+          --ip_brokers_nettwork_v6 "2001:9092:9092::12" \
+          --ip_controllers_network_v4 "172.21.82.22" \
+          --ip_controllers_network_v6 "2001:2181:2181::22" \
+          --ip_apps_network_v4 "172.80.80.12" \
+          --ip_apps_network_v6 "2001:8080:8080::12"
+
+        CreateBrokereAcl --dns1 "broker3" \
+          --dns2 "broker3.$$ENV_NAME" \
+          --dns3 "localhost" \
+          --ip_brokers_network_v4 "172.90.92.13" \
+          --ip_brokers_nettwork_v6 "2001:9092:9092::13" \
+          --ip_controllers_network_v4 "172.21.82.23" \
+          --ip_controllers_network_v6 "2001:2181:2181::23" \
+          --ip_apps_network_v4 "172.80.80.13" \
+          --ip_apps_network_v6 "2001:8080:8080::13"
+
+  broker1:
+    image: apache/kafka:4.1.0
+    hostname: broker1
+    container_name: broker1
+    user: 1000:1001
+    depends_on:
+      create-certificates-for-brokers:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      brokers_network:
+        ipv4_address: 172.90.92.11
+        ipv6_address: 2001:9092:9092::11
+      controllers_network:
+        ipv4_address: 172.21.82.21
+        ipv6_address: 2001:2181:2181::21
+      apps_network:
+        ipv4_address: 172.80.80.11
+        ipv6_address: 2001:8080:8080::11
+    ports:
+      - "9094:9094"
+    environment:
+      # Config docs: https://kafka.apache.org/documentation/
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 1
+      CLUSTER_ID: "bHcwZ3c3a2FqbjFxZHN3OX" # 16 bytes of a base64-encoded UUID. Practically 22 b64 characters. Shell: `uuidgen --time | tr -d '-' | base64 | cut -b 1-22`. JavaScript: `btoa((Math.random()*1e64).toString(36)).substring(0,22)`
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker1:2181,2@broker2:2181,3@broker3:2181"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "BROKER:SSL, CONTROLLER:SSL, APPS:SSL, EXTERNAL_APPS:SSL"
+      KAFKA_LISTENERS: "BROKER://:9091,CONTROLLER://:2181,APPS://:9092,EXTERNAL_APPS://:9094"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://172.90.92.11:9091,APPS://172.80.80.11:9092,EXTERNAL_APPS://localhost:9094"
+
+      KAFKA_SSL_CLIENT_AUTH: "required"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_LOCATION: /kafka/secrets/acl-principal.pfx
+      KAFKA_SSL_KEYSTORE_PASSWORD: "Broker_demo_password"
+      KAFKA_SSL_KEY_PASSWORD: "Broker_demo_password"
+
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_SUPER_USERS: "User:CN=broker;User:CN=kafka-ui;User:CN=admin"
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_NUM_PARTITIONS: "1" # Default number of partitions for new topics
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1" # Default replication factor for new topics
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1" # Set to 1 to allow local cluster with 1 node
+
+      KAFKA_LOG_DIR: "/var/lib/kafka/data" # Where the data is stored
+
+      KAFKA_COMPRESSION_TYPE: "zstd"
+      KAFKA_COMPRESSION_ZSTD_LEVEL: "11"
+    healthcheck:
+      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker1:9092 --config ./bootstrap.conf || exit 1']
+      start_period: "7s"
+      interval: "5s"
+      timeout: "10s"
+      retries: 10
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Brokers/broker1:/kafka/secrets
+      - ./ContainerData/Kafka/Brokers/Broker1/Data:/var/lib/kafka/data
+
+  broker2:
+    image: apache/kafka:4.1.0
+    hostname: broker2
+    container_name: broker2
+    user: 1000:1001
+    depends_on:
+      create-certificates-for-brokers:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      brokers_network:
+        ipv4_address: 172.90.92.12
+        ipv6_address: 2001:9092:9092::12
+      controllers_network:
+        ipv4_address: 172.21.82.22
+        ipv6_address: 2001:2181:2181::22
+      apps_network:
+        ipv4_address: 172.80.80.12
+        ipv6_address: 2001:8080:8080::12
+    ports:
+      - "9095:9095"
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 2
+      CLUSTER_ID: "bHcwZ3c3a2FqbjFxZHN3OX"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker1:2181,2@broker2:2181,3@broker3:2181"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "BROKER:SSL, CONTROLLER:SSL, APPS:SSL, EXTERNAL_APPS:SSL"
+      KAFKA_LISTENERS: "BROKER://:9091,CONTROLLER://:2181,APPS://:9092,EXTERNAL_APPS://:9095"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://172.90.92.12:9091,APPS://172.80.80.12:9092,EXTERNAL_APPS://localhost:9095"
+
+      KAFKA_SSL_CLIENT_AUTH: "required"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_LOCATION: /kafka/secrets/acl-principal.pfx
+      KAFKA_SSL_KEYSTORE_PASSWORD: "Broker_demo_password"
+      KAFKA_SSL_KEY_PASSWORD: "Broker_demo_password"
+
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_SUPER_USERS: "User:CN=broker;User:CN=kafka-ui;User:CN=admin"
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_NUM_PARTITIONS: "1"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+
+      KAFKA_LOG_DIR: "/var/lib/kafka/data"
+
+      KAFKA_COMPRESSION_TYPE: "zstd"
+      KAFKA_COMPRESSION_ZSTD_LEVEL: "11"
+    healthcheck:
+      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker2:9092 --config ./bootstrap.conf || exit 1']
+      start_period: "7s"
+      interval: "5s"
+      timeout: "10s"
+      retries: 10
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Brokers/broker2:/kafka/secrets
+      - ./ContainerData/Kafka/Brokers/Broker2/Data:/var/lib/kafka/data
+
+  broker3:
+    image: apache/kafka:4.1.0
+    hostname: broker3
+    container_name: broker3
+    user: 1000:1001
+    depends_on:
+      create-certificates-for-brokers:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      brokers_network:
+        ipv4_address: 172.90.92.13
+        ipv6_address: 2001:9092:9092::13
+      controllers_network:
+        ipv4_address: 172.21.82.23
+        ipv6_address: 2001:2181:2181::23
+      apps_network:
+        ipv4_address: 172.80.80.13
+        ipv6_address: 2001:8080:8080::13
+    ports:
+      - "9096:9096"
+    environment:
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_NODE_ID: 3
+      CLUSTER_ID: "bHcwZ3c3a2FqbjFxZHN3OX"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@broker1:2181,2@broker2:2181,3@broker3:2181"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "BROKER"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "BROKER:SSL, CONTROLLER:SSL, APPS:SSL, EXTERNAL_APPS:SSL"
+      KAFKA_LISTENERS: "BROKER://:9091,CONTROLLER://:2181,APPS://:9092,EXTERNAL_APPS://:9096"
+      KAFKA_ADVERTISED_LISTENERS: "BROKER://172.90.92.13:9091,APPS://172.80.80.13:9092,EXTERNAL_APPS://localhost:9096"
+
+      KAFKA_SSL_CLIENT_AUTH: "required"
+      KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: "false"
+
+      KAFKA_SSL_KEYSTORE_TYPE: PKCS12
+      KAFKA_SSL_KEYSTORE_LOCATION: /kafka/secrets/acl-principal.pfx
+      KAFKA_SSL_KEYSTORE_PASSWORD: "Broker_demo_password"
+      KAFKA_SSL_KEY_PASSWORD: "Broker_demo_password"
+
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+
+      KAFKA_AUTHORIZER_CLASS_NAME: "org.apache.kafka.metadata.authorizer.StandardAuthorizer"
+      KAFKA_LOG4J_ROOT_LOGLEVEL: "WARN"
+      KAFKA_SUPER_USERS: "User:CN=broker;User:CN=kafka-ui;User:CN=admin"
+
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
+      KAFKA_NUM_PARTITIONS: "1"
+      KAFKA_DEFAULT_REPLICATION_FACTOR: "1"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+
+      KAFKA_LOG_DIR: "/var/lib/kafka/data"
+
+      KAFKA_COMPRESSION_TYPE: "zstd"
+      KAFKA_COMPRESSION_ZSTD_LEVEL: "11"
+    healthcheck:
+      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker3:9092 --config ./bootstrap.conf || exit 1']
+      start_period: "7s"
+      interval: "5s"
+      timeout: "10s"
+      retries: 10
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Brokers/broker3:/kafka/secrets
+      - ./ContainerData/Kafka/Brokers/Broker3/Data:/var/lib/kafka/data
+
+  create-certificates-for-users:
+    image: localhost/cert-creator:latest
+    user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-certificates-for-users
+    depends_on:
+      create-certificate-authority:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    volumes:
+      - ./ContainerData:/ContainerData
+    environment:
+      RECREATE_IF_EXISTS: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        if [ -f /ContainerData/GeneratedCerts/Kafka/Users/admin/acl-principal.pfx ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
+          echo 'Admin users pfx file exists assuming that all other user certs also exist, and recreation not set to true, exiting without creating any certs'
+          exit 0
+        fi
+        echo '================ Setting Up Variables ============================='
+        VALIDITY_DAYS='365'
+        # Default to 1024, because 4096 is noticeably slow to humans, and default mode here is demo
+        RSA_BITS='1024'
+        CERT_PASSWORD_LENGTH='32'
+        USE_DEMO_PASSWORDS='true'
+
+        CA_PASSWORD_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/password.txt'
+        CA_KEY_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/ca.key'
+        CA_CRT_FILE_NAME='ca.crt'
+        CA_CRT_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/'$$CA_CRT_FILE_NAME
+
+        echo '================ Done Setting Up Variables ========================'
+
+        function CreateCertsForUser {
+          local USER_CN=$$1
+          local USER_OUTPUT_DIR="/ContainerData/GeneratedCerts/Kafka/Users/$$1"
+          echo "Cleaning and setting up folder structure for $$USER_CN certificate"
+          rm -rf $$USER_OUTPUT_DIR
+          mkdir -p $$USER_OUTPUT_DIR
+          pushd $$USER_OUTPUT_DIR
+
+          echo "Setting up password for $$USER_CN certificate"
+          local USER_PASSWORD=$(tr -dc 'A-Za-z0-9!$%&()*+,-./<>?@[\]^_{|}~' </dev/urandom | head -c $$CERT_PASSWORD_LENGTH; echo)
+          if [ ''$$USE_DEMO_PASSWORDS == 'true' ]; then
+            echo "WARNING: Setting up local demo password for $$USER_CN certificate"
+            USER_PASSWORD='demo_cert_password'
+          fi
+          echo $$USER_PASSWORD > $$USER_OUTPUT_DIR/password.txt
+
+          echo "Creating private key for $$USER_CN certificate"
+          openssl genrsa \
+            -passout file:$$USER_OUTPUT_DIR/password.txt \
+            -aes256 \
+            -out $$USER_OUTPUT_DIR/acl-principal.key $$RSA_BITS
+
+          echo "Creating unencrypted copy of private key"
+          openssl rsa \
+            -in $$USER_OUTPUT_DIR/acl-principal.key \
+            -passin pass:$$USER_PASSWORD \
+            -out $$USER_OUTPUT_DIR/acl-principal.unencrypted.key
+
+          echo "Creating certificate signing request config for $$USER_CN certificate"
+          printf '%s\n' \
+            '[req]' \
+            'default_bits = '$$RSA_BITS \
+            'prompt = no' \
+            'default_md = sha512' \
+            'distinguished_name = req_distinguished_name' \
+            'x509_extensions = v3_req' \
+            '' \
+            '[req_distinguished_name]' \
+            '' \
+            '[v3_req]' \
+              'basicConstraints=CA:FALSE' > $$USER_OUTPUT_DIR/acl-principal.csr.config
+
+          echo "Creating certificate signing request for $$USER_CN certificate"
+          openssl req \
+            -new \
+            -key $$USER_OUTPUT_DIR/acl-principal.key \
+            -passin pass:$$USER_PASSWORD \
+            -subj /CN=$$USER_CN \
+            -out $$USER_OUTPUT_DIR/acl-principal.csr \
+            -config $$USER_OUTPUT_DIR/acl-principal.csr.config
+
+          echo "Creating and signing certificate for $$USER_CN"
+          openssl x509 \
+            -req \
+            -CA $$CA_CRT_PATH \
+            -CAkey $$CA_KEY_PATH \
+            -passin file:$$CA_PASSWORD_PATH \
+            -in $$USER_OUTPUT_DIR/acl-principal.csr \
+            -out $$USER_OUTPUT_DIR/acl-principal.crt \
+            -days $$VALIDITY_DAYS \
+            -CAcreateserial \
+            -extensions v3_req \
+            -extfile $$USER_OUTPUT_DIR/acl-principal.csr.config
+
+          echo "Creating pkcs12 certificate bundle for $$USER_CN"
+          openssl pkcs12 \
+            -inkey $$USER_OUTPUT_DIR/acl-principal.key \
+            -in $$USER_OUTPUT_DIR/acl-principal.crt \
+            -passin pass:$$USER_PASSWORD \
+            -passout pass:$$USER_PASSWORD \
+            -export \
+            -out $$USER_OUTPUT_DIR/acl-principal.pfx
+
+          echo "Copying CA certificate/public key to $$USER_CN folder"
+          cp $$CA_CRT_PATH $$USER_OUTPUT_DIR/
+
+          echo "Creating admin client config file for $$USER_CN"
+          printf '%s\n' \
+            'security.protocol=SSL' \
+            'ssl.keystore.location=acl-principal.pfx' \
+            'ssl.keystore.password='$$USER_PASSWORD \
+            'ssl.keystore.type=PKCS12' \
+            'ssl.truststore.type=PEM' \
+            'ssl.truststore.location='$$CA_CRT_FILE_NAME > $$USER_OUTPUT_DIR/adminclient-configs.conf
+
+          popd
+        }
+
+        CreateCertsForUser "admin"
+        CreateCertsForUser "kafka-ui"
+        CreateCertsForUser "address-downloader"
+        CreateCertsForUser "address-refiner"
+        CreateCertsForUser "address-web-api"
+        CreateCertsForUser "distributed-cache"
+
+  create-acls:
+    image: apache/kafka:4.1.0
+    hostname: create-acls
+    container_name: create-acls
+    user: 1000:1001
+    networks:
+      - apps_network
+    depends_on:
+      create-certificates-for-users:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+    environment:
+      BOOTSTRAP_SERVERS: "broker1:9092"
+      _JAVA_OPTIONS: "-Xmx64M -Xms64M"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        cd /kafka/secrets
+
+        function CreateProduceAcl {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --topic*|-t*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                TOPIC="$${1#*=}"
+                ;;
+              --principal*|-p*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                PRINCIPAL="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+          /opt/kafka/bin/kafka-acls.sh --bootstrap-server "$$BOOTSTRAP_SERVERS" \
+            --command-config 'adminclient-configs.conf' \
+            --add \
+            --allow-principal "User:CN=$$PRINCIPAL" \
+            --allow-host '*' \
+            --producer \
+            --topic "$$TOPIC"
+        }
+
+        function CreateConsumeAcl {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --topic*|-t*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                TOPIC="$${1#*=}"
+                ;;
+              --principal*|-p*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                PRINCIPAL="$${1#*=}"
+                ;;
+              --group|-g)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                GROUP="$${1#*=}"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+          /opt/kafka/bin/kafka-acls.sh --bootstrap-server "$$BOOTSTRAP_SERVERS" \
+            --command-config 'adminclient-configs.conf' \
+            --add \
+            --allow-principal "User:CN=$$PRINCIPAL" \
+            --allow-host '*' \
+            --consumer \
+            --topic "$$TOPIC" \
+            --group "$$GROUP"
+        }
+
+        CreateProduceAcl --topic "cadastre-matrikkel-vegadresse-raw" --principal "address-downloader"
+
+        CreateConsumeAcl --topic "cadastre-matrikkel-vegadresse-raw" --principal "address-refiner" --group "address-refiner-group"
+        CreateConsumeAcl --topic "cadastre-matrikkel-vegadresse-processed" --principal "address-refiner" --group "address-refiner-group"
+        CreateProduceAcl --topic "cadastre-matrikkel-vegadresse-processed" --principal "address-refiner"
+
+        CreateConsumeAcl --topic "cadastre-matrikkel-vegadresse-processed" --principal "address-web-api" --group "address-web-api-group"
+
+        CreateProduceAcl --topic "distributed-cache" --principal "distributed-cache"
+        CreateConsumeAcl --topic "distributed-cache"  --principal "distributed-cache" --group "distributed-cache-group"
+
+  create-demo-topics:
+    image: apache/kafka:4.1.0
+    hostname: create-demo-topics
+    container_name: create-demo-topics
+    user: 1000:1001
+    networks:
+      - apps_network
+    depends_on:
+      create-certificates-for-users:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+    environment:
+      BOOTSTRAP_SERVERS: "broker1:9092"
+      _JAVA_OPTIONS: "-Xmx64M -Xms64M"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        cd /kafka/secrets
+
+        # blocks until kafka is reachable
+        /opt/kafka/bin/kafka-topics.sh --bootstrap-server $$BOOTSTRAP_SERVERS --command-config 'adminclient-configs.conf' --list
+
+        function CreateTopic {
+          # TOPIC_NAME="$$1"
+          # shift
+          # RETENTION_POLICY="$$1"
+
+          /opt/kafka/bin/kafka-topics.sh \
+            --bootstrap-server $$BOOTSTRAP_SERVERS \
+            --command-config 'adminclient-configs.conf' \
+            --create \
+            --if-not-exists \
+            --topic $$1 \
+            --replication-factor '3' \
+            --partitions '1' \
+            --config "cleanup.policy=$$2" \
+            --config 'min.insync.replicas=2' \
+            --config 'retention.bytes=-1' \
+            --config 'retention.ms=-1' \
+            --config 'max.compaction.lag.ms=1800000' \
+            --config 'segment.ms=900000'
+        }
+
+        CreateTopic "cadastre-matrikkel-vegadresse-raw" "delete"
+        CreateTopic "cadastre-matrikkel-vegadresse-processed" "compact"
+        CreateTopic "distributed-cache" "compact"
+
+  schema-registry:
+    image: apicurio/apicurio-registry:latest-release
+    hostname: schema-registry
+    container_name: schema-registry
+    user: 1000:1001
+    depends_on:
+      set-up-container-mount-area:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    networks:
+      - apps_network
+    ports:
+      - "8083:8080"
+    volumes:
+      - ./ContainerData/Apicurio:/container_storage
+    environment:
+      APPLICATION_ID: "example-apicurioregistry"
+      REGISTRY_API_ERRORS_INCLUDE-STACK-IN-RESPONSE: "true"
+      REGISTRY_AUTH_ENABLED: "false"
+      APICURIO_STORAGE_KIND: 'sql'
+      APICURIO_STORAGE_SQL_KIND: 'h2'
+      APICURIO_DATASOURCE_URL: "jdbc:h2:file:/container_storage/apicurio_h2_file_db"
+    healthcheck:
+      test: curl --fail localhost:8080/health/ready
+      interval: 1m30s
+      timeout: 30s
+      retries: 5
+      start_period: 1s
+
+  create-demo-schemas:
+    image: localhost/cert-creator:latest # Re-use same we use for certs
+    # user: 1000:1001
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM debian:stable-slim
+
+        RUN apt-get update \
+            && apt-get install -y curl \
+            && apt-get install -y sed \
+            && apt-get install -y openssl \
+            && apt-get install -y coreutils \
+            && apt-get install -y tar
+        # `apt-get install -y base64` is replaced with `apt-get install -y coreutils`
+    container_name: create-demo-schemas
+    depends_on:
+      schema-registry:
+        required: true
+        restart: false
+        condition: service_healthy
+    networks:
+      - apps_network
+    environment:
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8080/apis/ccompat/v7"
+      COMMENT: "Don't use protobuf comments in pre pre-registration below!"
+      SCHEMA_DEFINITION_CADASTRE_RAW_VALUE: |
+        syntax = "proto3";
+        package no.nhn.address.cadastre.road.importformat;
+        option java_package = "no.nhn.address.cadastre.road.importFormat";
+        option csharp_namespace = "No.Nhn.Address.Cadastre.ImportFormat";
+
+        message CadastreRoadAddressImport {
+          string LocalId = 1;
+          string MunicipalityNumber = 2;
+          string MunicipalityName = 3;
+          string AddressType = 4;
+          string AddressAdditionalName = 5;
+          string AddressAdditionalNameSource = 6;
+          string AddressCode = 7;
+          string AddressName = 8;
+          string Number = 9;
+          string Letter = 10;
+          string CadastralUnitNumber = 11;
+          string PropertyUnitNumber = 12;
+          string LeaseNumber = 13;
+          string SubNumber = 14;
+          string AddressText = 15;
+          string AddressTextWithoutAddressAdditionalName = 16;
+          string EpsgCode = 17;
+          string North = 18;
+          string East = 19;
+          string PostalCode = 20;
+          string PostalCity = 21;
+          string UpdateDate = 22;
+          string DataTakeOutDate = 23;
+          string AddressId = 24;
+          string UuidAddress = 25;
+          string AccessId = 26;
+          string UuidAccess = 27;
+          string AccessNorth = 28;
+          string AccessSouth = 29;
+          string SummerAccessId = 30;
+          string UuidSummerAccess = 31;
+          string SummerAccessNorth = 32;
+          string SummerAccessEast = 33;
+          string WinterAccessId = 34;
+          string UuidWinterAccess = 35;
+          string WinterAccessNorth = 36;
+          string WinterAccessEast = 37;
+        }
+      SCHEMA_DEFINITION_CADASTRE_REFINED_VALUE: |
+        syntax = "proto3";
+        package no.nhn.address.cadastre.road;
+        option java_package = "no.nhn.address.cadastre.road";
+        option csharp_namespace = "No.Nhn.Address.Cadastre.Road";
+
+        message CadastreRoadAddress {
+          string AddressId = 1;
+          string AddressUuid = 2;
+          string AddressCode = 3;
+          string AddressType = 4;
+          string UpdateDate = 5;
+          string MunicipalityNumber = 6;
+          string MunicipalityName = 7;
+          string CadastralUnitNumber = 8;
+          string PropertyUnitNumber = 9;
+          string LeaseNumber = 10;
+          string SubNumber = 11;
+          string AddressAdditionalName = 12;
+          string AddressName = 13;
+          string Number = 14;
+          string Letter = 15;
+          string AddressText = 16;
+          string AddressTextWithoutAddressAdditionalName = 17;
+          string PostalCode = 18;
+          string PostalCity = 19;
+          string EpsgCode = 20;
+          string North = 21;
+          string East = 22;
+          string AccessId = 23;
+          string AccessUuid = 24;
+          string AccessNorth = 25;
+          string AccessSouth = 26;
+          string AccessSummerId = 27;
+          string AccessSummerUuid = 28;
+          string AccessSummerNorth = 29;
+          string AccessSummerEast = 30;
+          string AccessWinterId = 31;
+          string AccessWinterUuid = 32;
+          string AccessWinterNorth = 33;
+          string AccessWinterEast = 34;
+        }
+
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        function AddSchemaToRegistry {
+          while [ $$# -gt 0 ]; do
+            case "$$1" in
+              --name*|-n*)
+                if [[ "$$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+                SCHEMA_NAME="$$1"
+                ;;
+              --value*|-v*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                SCHEMA_VALUE="$$1"
+                ;;
+              --type*|-t*)
+                if [[ "$$1" != *=* ]]; then shift; fi
+                SCHEMA_TYPE="$$1"
+                ;;
+              *)
+                >&2 printf "Error: Invalid argument\n"
+                exit 1
+                ;;
+            esac
+            shift
+          done
+
+          echo "============== Creating Demo Schema $$SCHEMA_NAME =================="
+          echo "Escaping double quotes in schema $$SCHEMA_NAME"
+          # Note double escape of the quotes (\\")
+          local schema_escaped=$(echo $$SCHEMA_VALUE | sed 's/"/\\"/g')
+
+          echo "Writing request body containing escaped schema to file"
+          echo '{'                                    >  schema.json
+          echo "  \"schema\": \"$$schema_escaped\","  >> schema.json
+          echo "  \"schemaType\":\"$$SCHEMA_TYPE\""   >> schema.json
+          echo '}'                                    >> schema.json
+          # Valid schema types at the moment are ["JSON","PROTOBUF","AVRO"] (curl --silent -X GET http://schema-registry:8080/apis/ccompat/v7/schemas/types)
+
+          # echo "removing newlines in data to post"
+          # sed -i 's/\n//g' schema.json
+
+          echo "Posting schema to registry"
+          curl -X POST -H "Content-Type: application/json" \
+            --data @schema.json \
+            $$KAFKA_CLUSTERS_0_SCHEMAREGISTRY/subjects/$$SCHEMA_NAME/versions
+          echo "" # Add newline to make log prettier
+          echo "============== Done Creating Demo Schema $$SCHEMA_NAME ============="
+        }
+
+        AddSchemaToRegistry --name "cadastre-matrikkel-vegadresse-raw-value" --value "$$SCHEMA_DEFINITION_CADASTRE_RAW_VALUE" --type "PROTOBUF"
+        AddSchemaToRegistry --name "cadastre-matrikkel-vegadresse-processed-value" --value "$$SCHEMA_DEFINITION_CADASTRE_REFINED_VALUE" --type "PROTOBUF"
+
+  kafka-ui:
+    image: ncr.sky.nhn.no/ghcr/kafbat/kafka-ui
+    hostname: kafka-ui
+    container_name: kafka-ui
+    user: 1000:1001
+    depends_on:
+      create-certificates-for-users:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+      broker1:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker2:
+        required: true
+        restart: false
+        condition: service_healthy
+      broker3:
+        required: true
+        restart: false
+        condition: service_healthy
+      schema-registry:
+        required: true
+        restart: false
+        condition: service_healthy
+    networks:
+      - apps_network
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./ContainerData/GeneratedCerts/Kafka/Users/kafka-ui:/kafka/secrets
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "lokalmaskin"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: "http://schema-registry:8080/apis/ccompat/v7"
+
+      KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL: "SSL"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_TYPE: "PEM"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE: "PKCS12"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION: "/kafka/secrets/acl-principal.pfx"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD: "demo_cert_password"
+      KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEY_PASSWORD: "demo_cert_password"
+
+      KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED: "true"
+      KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED: "true"
+      KAFKA_CLUSTERS_0_AUDIT_TOPIC: "__kui-audit-log"
+      KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_MS: "-1" # Time-wise, retain logs forever
+      KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_BYTES: "1048576" # Only keep 1MiB of logs locally
+      KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICSPARTITIONS: "1"
+      KAFKA_CLUSTERS_0_AUDIT_LEVEL: "all"
+
+  otel-lgtm-stack:
+    image: grafana/otel-lgtm
+    ports:
+      - 3001:3000
+      # - 4317:4317
+      # - 4318:4318
+    # healthcheck:
+    #   test: ['CMD', '/bin/bash', '-c', '/bin/cat /tmp/ready || exit 1']
+    #   start_period: "7s"
+    #   interval: "5s"
+    #   timeout: "10s"
+    #   retries: 10
+    networks:
+      - apps_network
+    depends_on:
+      set-up-container-mount-area:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    environment:
+      GF_PATHS_DATA: "/data/grafana"
+    volumes:
+      - "./ContainerData/OtelGrafana/tempo/data:/data/tempo"
+      - "./ContainerData/OtelGrafana/grafana/data:/data/grafana"
+      - "./ContainerData/OtelGrafana/loki/data:/data/loki"
+      - "./ContainerData/OtelGrafana/loki/storage:/loki"
+      - "./ContainerData/OtelGrafana/prometheus/data:/data/prometheus"
+      - "./ContainerData/OtelGrafana/pyroscope/data:/data/pyroscope"
+
+
+  create-observability-stack-configs:
+    image: debian:stable-slim
+    user: 1000:1001
+    container_name: create-observability-stack-configs
+    depends_on:
+      set-up-container-mount-area:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    volumes:
+      - ./ContainerData:/ContainerData
+    environment:
+      RECREATE_IF_EXISTS: "false"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo '================ Creating directory structure ============================='
+        mkdir -p /ContainerData/ObservabilityStackConfig
+        cd /ContainerData/ObservabilityStackConfig
+        mkdir -p /ContainerData/ObservabilityStackConfig/grafana
+        mkdir -p /ContainerData/ObservabilityStackConfig/grafana/datasources
+        mkdir -p /ContainerData/ObservabilityStackConfig/grafana-loki
+        mkdir -p /ContainerData/ObservabilityStackConfig/grafana-mimir
+        mkdir -p /ContainerData/ObservabilityStackConfig/grafana-tempo
+        mkdir -p /ContainerData/ObservabilityStackConfig/opentelemetry-collector
+        echo '================ Done Creating directory structure ========================'
+        # In the section below, note that cat <<'EOF' makes the output literal without bash attempting transforms,
+        # but still need to escape $ with $$, so outputed $$ has to be rewritten to $$$$ here.
+        echo '================ Creating Grafana Ini Config ============================='
+        cat <<'EOF' > /ContainerData/ObservabilityStackConfig/grafana/grafana.ini
+        [auth]:
+        disable_login_form: false
+
+        [auth.anonymous]:
+        enabled: true
+        org_role: Admin
+
+        [log]:
+        mode: console
+        level: error
+
+        [feature_toggles]:
+        enable: traceqlEditor traceQLStreaming metricsSummary tempoApmTable traceToMetrics
+
+        [analytics]:
+        enabled: false
+        reporting_enabled: false
+        check_for_updates: false
+        check_for_plugin_updates: false
+        EOF
+        echo '================ Done Creating Grafana Ini Config ========================'
+
+        echo '================ Creating Grafana Data Sources Config ============================='
+        cat <<'EOF' > /ContainerData/ObservabilityStackConfig/grafana/datasources/datasources.yaml
+        apiVersion: 1
+
+        datasources:
+          - name: Loki
+            type: loki
+            uid: Loki
+            url: http://grafana-loki:3100
+            editable: true
+            jsonData:
+              derivedFields:
+                - datasourceUid: "Tempo"
+                  matcherRegex: "trace_id"
+                  matcherType: "label"
+                  name: "trace_id"
+                  url: "$$$${__value.raw}"
+          - name: Mimir
+            type: prometheus
+            uid: Mimir
+            url: http://grafana-mimir:9009/prometheus
+            editable: true
+            jsonData:
+              httpMethod: POST
+              exemplarTraceIdDestinations:
+                - datasourceUid: Tempo
+                  name: trace_id
+              prometheusType: Mimir
+              prometheusVersion: 2.9.1
+          - name: Tempo
+            type: tempo
+            uid: Tempo
+            url: http://grafana-tempo:3200
+            editable: true
+            jsonData:
+              httpMethod: GET
+              nodeGraph:
+                enabled: true
+              search:
+                filters:
+                  - id": service-name
+                    operator: =
+                    scope: resource
+                    tag: service.name
+                  - id: span-name
+                    operator: =
+                    scope: span
+                    tag: name
+              serviceMap:
+                datasourceUid: Mimir
+              tracesToLogsV2:
+                customQuery: true
+                datasourceUid: Loki
+                filterByTraceID: false
+                query: '{$$$${__tags}} | trace_id="$$$${__trace.traceId}"'
+                spanEndTimeShift: 30s
+                spanStartTimeShift: -30s
+                tags:
+                  - key: service.name
+                    value: service_name
+        EOF
+        echo '================ Done Creating Grafana Data Sources Config ========================'
+
+        echo '================ Creating Grafana Loki Config ============================='
+        cat <<'EOF' > /ContainerData/ObservabilityStackConfig/grafana-loki/config.yaml
+        auth_enabled: false
+
+        server:
+          http_listen_port: 3100
+          grpc_listen_port: 9096
+          grpc_server_max_recv_msg_size: 50_123_123
+          # log_level: error
+          log_level: info
+
+        common:
+          instance_addr: 127.0.0.1
+          path_prefix: /tmp/loki
+          storage:
+            filesystem:
+              chunks_directory: /tmp/loki/chunks
+              rules_directory: /tmp/loki/rules
+          replication_factor: 1
+          ring:
+            kvstore:
+              store: inmemory
+
+        query_range:
+          results_cache:
+            cache:
+              embedded_cache:
+                enabled: true
+                max_size_mb: 500
+
+        schema_config:
+          configs:
+            - from: 2020-10-24
+              store: tsdb
+              object_store: filesystem
+              schema: v13
+              index:
+                prefix: index_
+                period: 24h
+
+        limits_config:
+          allow_structured_metadata: true
+          ingestion_rate_mb: 100
+          ingestion_burst_size_mb: 200
+
+        analytics:
+          reporting_enabled: false
+        EOF
+        echo '================ Done Creating Grafana Loki Config ========================'
+
+        echo '================ Creating Grafana Mimir Config ============================='
+        cat <<'EOF' > /ContainerData/ObservabilityStackConfig/grafana-mimir/config.yaml
+        # Do not use this configuration in production.
+        # It is for demonstration purposes only.
+        multitenancy_enabled: false
+
+        memberlist:
+          bind_addr:
+            - 127.0.0.1
+          #  - localhost
+          # join:
+          #   grafana-mimir:7946
+          join_members:
+          #  - grafana-mimir-gossip-ring:7946
+            - grafana-mimir:7946
+
+        blocks_storage:
+          backend: filesystem
+          bucket_store:
+            sync_dir: /tmp/mimir/tsdb-sync
+          filesystem:
+            dir: /tmp/mimir/data/tsdb
+          tsdb:
+            dir: /tmp/mimir/tsdb
+
+        compactor:
+          data_dir: /tmp/mimir/compactor
+          sharding_ring:
+            instance_addr: 127.0.0.1
+            kvstore:
+              store: memberlist
+
+        distributor:
+          ring:
+            instance_addr: 127.0.0.1
+            kvstore:
+              store: memberlist
+
+        ingester:
+          ring:
+            instance_addr: 127.0.0.1
+            kvstore:
+              store: memberlist
+            replication_factor: 1
+
+        ruler_storage:
+          backend: filesystem
+          filesystem:
+            dir: /tmp/mimir/rules
+
+        server:
+          http_listen_port: 9009
+          log_level: error
+
+        store_gateway:
+          sharding_ring:
+            replication_factor: 1
+
+        limits:
+          max_global_exemplars_per_user: 10000
+
+        usage_stats:
+          enabled: false
+        EOF
+        echo '================ Done Creating Grafana Mimir Config ========================'
+
+        echo '================ Creating Grafana Tempo Config ============================='
+        cat <<'EOF' > /ContainerData/ObservabilityStackConfig/grafana-tempo/config.yaml
+        # memberlist:
+        #   bind_addr:
+        #     - 127.0.0.1
+        distributor:
+          receivers:
+            otlp:
+              protocols:
+                grpc:
+                  endpoint: grafana-tempo:4317
+
+        ingester:
+          flush_check_period: 1s
+          lifecycler:
+            address: grafana-tempo
+            min_ready_duration: 1s
+            ring:
+              kvstore:
+                store: inmemory
+              replication_factor: 1
+          max_block_duration: 1s
+          trace_idle_period: 1s
+
+        metrics_generator:
+          processor:
+            local_blocks:
+              filter_server_spans: false
+            span_metrics:
+              dimensions:
+                - operation
+                - service_name
+                - status_code
+          storage:
+            path: /tmp/tempo/generator/wal
+            remote_write:
+              - url: http://grafana-mimir:9009/api/v1/push
+                send_exemplars: true
+          traces_storage:
+            path: /tmp/tempo/generator/traces
+
+        stream_over_http_enabled: true
+
+        server:
+          grpc_listen_port: 9096
+          http_listen_port: 3200
+          log_level: error
+
+        querier:
+          frontend_worker:
+            frontend_address: grafana-tempo:9096
+
+        storage:
+          trace:
+            backend: local
+            local:
+              path: /tmp/tempo/blocks
+            wal:
+              path: /tmp/tempo/wal
+
+        overrides:
+          metrics_generator_processors:
+            - local-blocks
+            - service-graphs
+            - span-metrics
+
+        usage_report:
+          reporting_enabled: false
+
+        EOF
+        echo '================ Done Creating Grafana Tempo Config ========================'
+        echo '================ Creating OpenTelemetry Collector Config ============================='
+        # Nice guide for filtering: https://last9.io/blog/opentelemetry-configurations-filtering-sampling-enrichment/
+        # Updated docs with correct syntax:
+        # - Tail sampler: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md
+        # - Filter: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/filterprocessor/README.md
+        # Note you have to use the otel contrib variant of the collector image to get these running
+        cat <<'EOF' > /ContainerData/ObservabilityStackConfig/opentelemetry-collector/config.yaml
+        receivers:
+          otlp:
+            protocols:
+              grpc:
+                endpoint: opentelemetry-collector:4317
+                max_recv_msg_size_mib: 100
+              http:
+                endpoint: opentelemetry-collector:4318
+
+        processors:
+          # https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/batchprocessor/README.md
+          batch:
+          # https://github.com/open-telemetry/opentelemetry-collector/blob/main/processor/memorylimiterprocessor/README.md
+          memory_limiter:
+            check_interval: 1s
+            limit_mib: 2000
+            spike_limit_mib: 1000
+          # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/tailsamplingprocessor/README.md
+          tail_sampling:
+            decision_wait: 1s
+            num_traces: 100_000
+            expected_new_traces_per_sec: 10_000
+            decision_cache:
+              sampled_cache_size: 1_000_000
+              non_sampled_cache_size: 1_000_000
+            policies:
+              [
+                  {
+                    name: status-code,
+                    type: status_code,
+                    status_code: { status_codes: [ERROR] },
+                  },
+                  {
+                    name: composite-policy-1,
+                    type: composite,
+                    composite:
+                    {
+                      max_total_spans_per_second: 100,
+                      policy_order:
+                      [
+                        composite-name-match-1,
+                        composite-name-match-2,
+                        composite-name-match-3,
+                        composite-name-match-4,
+                        composite-name-match-5,
+                        composite-pass-rest
+                      ],
+                      composite_sub_policy:
+                        [
+                          { name: composite-name-match-1, type: ottl_condition, ottl_condition: { error_mode: ignore, span: [ 'name == "AddressStorage.Store"' ], spanevent: [] } },
+                          { name: composite-name-match-2, type: ottl_condition, ottl_condition: { error_mode: ignore, span: [ 'name == "RawAddressStreamConsumer.DoWork.BestestActivity"' ], spanevent: [] } },
+                          { name: composite-name-match-3, type: ottl_condition, ottl_condition: { error_mode: ignore, span: [ 'name == "Producer.Produce"' ], spanevent: [] } },
+                          { name: composite-name-match-4, type: ottl_condition, ottl_condition: { error_mode: ignore, span: [ 'name == "OrganizationUnitStorage.TryQuery"' ], spanevent: [] } },
+                          { name: composite-name-match-5, type: ottl_condition, ottl_condition: { error_mode: ignore, span: [ 'name == "RefinedAddressStreamProcessingConsumer.Consume"' ], spanevent: [] } },
+                          { name: composite-pass-rest, type: always_sample }
+                        ],
+                      rate_allocation:
+                        [
+                          { policy: composite-name-match-1, percent: 5 },
+                          { policy: composite-name-match-2, percent: 10 },
+                          { policy: composite-name-match-3, percent: 10 },
+                          { policy: composite-name-match-4, percent: 10 },
+                          { policy: composite-name-match-5, percent: 10 },
+                          { policy: composite-pass-rest, percent: 100 }
+                        ]
+                    }
+                  }
+              ]
+          # https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/filterprocessor/README.md
+          filter:
+            error_mode: ignore
+            traces:
+              span:
+                - IsMatch(resource.attributes["http.url"], ".*/health")
+            logs:
+              log_record:
+                - 'IsMatch(body, "healthy")'
+                - 'severity_number < SEVERITY_NUMBER_WARN'
+
+        exporters:
+          otlp/otel-lgtm-stack:
+            endpoint: http://otel-lgtm-stack:4317
+            tls:
+              insecure: true
+          otlphttp/loki:
+            endpoint: http://grafana-loki:3100/otlp
+          otlphttp/mimir:
+            endpoint: http://grafana-mimir:9009/otlp
+          otlp/tempo:
+            endpoint: grafana-tempo:4317
+            tls:
+              insecure: true
+
+        extensions:
+          health_check:
+
+        service:
+          extensions: [health_check]
+          pipelines:
+            logs:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters:
+                - otlphttp/loki
+                - otlp/otel-lgtm-stack
+            metrics:
+              receivers: [otlp]
+              processors: [memory_limiter, batch]
+              exporters:
+                - otlphttp/mimir
+                - otlp/otel-lgtm-stack
+            traces:
+              receivers: [otlp]
+              processors: [memory_limiter, tail_sampling, filter, batch]
+              exporters:
+                - otlp/tempo
+                - otlp/otel-lgtm-stack
+          telemetry:
+            logs:
+              level: debug
+        EOF
+        echo '================ Done Creating OpenTelemetry Collector Config ========================'
+  grafana:
+    # image: grafana/grafana:12.1
+    image: grafana/grafana:latest
+    depends_on:
+      create-observability-stack-configs:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    ports:
+      - 3000:3000
+    networks:
+      - apps_network
+    volumes:
+      - ./ContainerData/ObservabilityStackConfig/grafana/grafana.ini:/etc/grafana/grafana.ini
+      - ./ContainerData/ObservabilityStackConfig/grafana/datasources:/etc/grafana/provisioning/datasources
+  grafana-loki:
+    # image: grafana/loki:3.5
+    image: grafana/loki:latest
+    depends_on:
+      create-observability-stack-configs:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    command: ["-config.file=/etc/config.yaml"]
+    networks:
+      - apps_network
+    volumes:
+      - ./ContainerData/ObservabilityStackConfig/grafana-loki/config.yaml:/etc/config.yaml
+      # - ./ContainerData/OtelGrafana/loki/storage:/tmp/loki
+  grafana-mimir:
+    # image: grafana/mimir:2.17.1
+    image: grafana/mimir:latest
+    depends_on:
+      create-observability-stack-configs:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    command: ["-config.file=/etc/config.yaml"]
+    networks:
+      - apps_network
+    volumes:
+      - ./ContainerData/ObservabilityStackConfig/grafana-mimir/config.yaml:/etc/config.yaml
+  grafana-tempo:
+    image: grafana/tempo:2.8.2
+    # image: grafana/tempo:latest
+    depends_on:
+      create-observability-stack-configs:
+        required: true
+        restart: false
+        condition: service_completed_successfully
+    command: ["-config.file=/etc/config.yaml"]
+    networks:
+      - apps_network
+    volumes:
+      - ./ContainerData/ObservabilityStackConfig/grafana-tempo/config.yaml:/etc/config.yaml
+      # - ./ContainerData/OtelGrafana/tempo/data:/tmp/tempo
+  opentelemetry-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    # image: otel/opentelemetry-collector-contrib:0.135.0
+    ports:
+      - 4317:4317
+      - 4318:4318
+      - 9201:9201
+    command: ["--config=/etc/config.yaml"]
+    networks:
+      - apps_network
+    volumes:
+      - ./ContainerData/ObservabilityStackConfig/opentelemetry-collector/config.yaml:/etc/config.yaml
+    depends_on:
+      - grafana-loki
+      - grafana-mimir
+      - grafana-tempo
+      - create-observability-stack-configs
+      - otel-lgtm-stack
