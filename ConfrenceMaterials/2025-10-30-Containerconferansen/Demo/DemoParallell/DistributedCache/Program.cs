@@ -3,6 +3,8 @@ using System.Net;
 using System.Text;
 using DistributedCache;
 using DistributedCache.Kafka.Producers;
+using DistributedCache.Storage.Inbox;
+using DistributedCache.Storage.Outbox;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +14,8 @@ var inboxKind = Environment.GetEnvironmentVariable(DISTRIBUTED_CACHE_STORAGE_INB
 switch (inboxKind?.ToLowerInvariant())
 {
     case "memory":
+        builder.Services.AddSingleton<IStorageInbox, StorageInboxDict>();
+        break;
     case "sqlite":
     default:
         builder.Services.AddSingleton<IStorageInbox, StorageInboxSqlite>();
@@ -22,6 +26,8 @@ var outboxKind = Environment.GetEnvironmentVariable(DISTRIBUTED_CACHE_STORAGE_OU
 switch (outboxKind?.ToLowerInvariant())
 {
     case "memory":
+        builder.Services.AddSingleton<IStorageOutbox, StorageOutboxConcurrentQueue>();
+        break;
     case "sqlite":
     default:
         builder.Services.AddSingleton<IStorageOutbox, StorageOutboxSqlite>();

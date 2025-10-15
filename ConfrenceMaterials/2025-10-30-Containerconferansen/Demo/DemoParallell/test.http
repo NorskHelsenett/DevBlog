@@ -1,4 +1,4 @@
-@baseurl=http://localhost:8080
+@baseurl=http://localhost:8001
 
 ###
 # Check if we're up, running, and healthy
@@ -64,7 +64,7 @@ POST {{baseurl}}/remove
 Content-Type: application/json
 
 {
-    "Id": "helloFirst"
+    "Key": "helloFirst"
 }
 
 ###
