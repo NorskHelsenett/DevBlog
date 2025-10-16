@@ -1163,15 +1163,15 @@ services:
         required: true
         restart: false
         condition: service_completed_successfully
-    environment:
-      GF_PATHS_DATA: "/data/grafana"
-    volumes:
-      - "./ContainerData/OtelGrafana/tempo/data:/data/tempo"
-      - "./ContainerData/OtelGrafana/grafana/data:/data/grafana"
-      - "./ContainerData/OtelGrafana/loki/data:/data/loki"
-      - "./ContainerData/OtelGrafana/loki/storage:/loki"
-      - "./ContainerData/OtelGrafana/prometheus/data:/data/prometheus"
-      - "./ContainerData/OtelGrafana/pyroscope/data:/data/pyroscope"
+    # environment:
+    #   GF_PATHS_DATA: "/data/grafana"
+    # volumes:
+    #   - "./ContainerData/OtelGrafana/tempo/data:/data/tempo"
+    #   - "./ContainerData/OtelGrafana/grafana/data:/data/grafana"
+    #   - "./ContainerData/OtelGrafana/loki/data:/data/loki"
+    #   - "./ContainerData/OtelGrafana/loki/storage:/loki"
+    #   - "./ContainerData/OtelGrafana/prometheus/data:/data/prometheus"
+    #   - "./ContainerData/OtelGrafana/pyroscope/data:/data/pyroscope"
 
 
   create-observability-stack-configs:

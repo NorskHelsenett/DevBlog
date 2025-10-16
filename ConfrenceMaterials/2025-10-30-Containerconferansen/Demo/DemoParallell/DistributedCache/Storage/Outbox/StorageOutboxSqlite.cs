@@ -73,9 +73,10 @@ public class StorageOutboxSqlite : IStorageOutbox
             VALUES ($k, $v, $h, $t);
         ";
         command.Parameters.AddWithValue("$k", item.Key);
-        command.Parameters.AddWithValue("$v", item.Value);
-        command.Parameters.AddWithValue("$h", serializedHeaders);
+        command.Parameters.AddWithValue("$v", item.Value ?? (object) DBNull.Value);
+        command.Parameters.AddWithValue("$h", serializedHeaders ?? (object) DBNull.Value);
         command.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow);
+
         activity?.AddEvent(new ActivityEvent("Command created", DateTimeOffset.UtcNow));
         var rowsAffected = command.ExecuteNonQuery();
         activity?.AddEvent(new ActivityEvent("Command executed", DateTimeOffset.UtcNow));
@@ -106,11 +107,15 @@ public class StorageOutboxSqlite : IStorageOutbox
             {
                 activity?.AddEvent(new ActivityEvent("Row retrieved", DateTimeOffset.UtcNow));
                 var key = reader.GetString(0);
-                var valueRaw = reader.GetStream(1);
-                var headersSerialized = reader.GetString(2);
+                var valueRaw = reader.IsDBNull(1) ? null : reader.GetStream(1);
+                var headersSerialized = reader.IsDBNull(2) ? null : reader.GetString(2);
 
-                byte[] valueConverted = [];
-                if (valueRaw is MemoryStream stream)
+                byte[]? valueConverted;
+                if (valueRaw == null)
+                {
+                    valueConverted = null;
+                }
+                else if (valueRaw is MemoryStream stream)
                 {
                     valueConverted = stream.ToArray();
                 }
@@ -121,7 +126,7 @@ public class StorageOutboxSqlite : IStorageOutbox
                     valueConverted = ms.ToArray();
                 }
                 activity?.AddEvent(new ActivityEvent("Start unpackaging headers", DateTimeOffset.UtcNow));
-                var headers = System.Text.Json.JsonSerializer.Deserialize<List<KeyValuePair<string, string>>>(headersSerialized);
+                var headers = headersSerialized == null ? null : System.Text.Json.JsonSerializer.Deserialize<List<KeyValuePair<string, string>>>(headersSerialized);
                 activity?.AddEvent(new ActivityEvent("Done unpackaging headers", DateTimeOffset.UtcNow));
 
                 return (Error: null, NextItem: new DcItem { Key = key, Value = valueConverted, Headers = headers });
@@ -150,8 +155,8 @@ public class StorageOutboxSqlite : IStorageOutbox
             VALUES ($k, $v, $h, $t);
         ";
         command.Parameters.AddWithValue("$k", next.NextItem.Key);
-        command.Parameters.AddWithValue("$v", next.NextItem.Value);
-        command.Parameters.AddWithValue("$h", next.NextItem.Headers);
+        command.Parameters.AddWithValue("$v", next.NextItem.Value ?? (object) DBNull.Value);
+        command.Parameters.AddWithValue("$h", next.NextItem.Headers ?? (object) DBNull.Value);
         command.Parameters.AddWithValue("$t", DateTimeOffset.UtcNow);
         activity?.AddEvent(new ActivityEvent("Command created", DateTimeOffset.UtcNow));
         var rowsAffected = command.ExecuteNonQuery();

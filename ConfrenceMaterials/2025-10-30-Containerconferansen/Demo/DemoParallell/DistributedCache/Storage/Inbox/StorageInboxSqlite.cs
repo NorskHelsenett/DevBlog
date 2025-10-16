@@ -67,7 +67,7 @@ public class StorageInboxSqlite : IStorageInbox
     {
         using var activity = _activitySource.StartActivity("storage.inbox.sqlite.store");
         _storeRequestedCounter.Add(1);
-        var serializedHeaders = System.Text.Json.JsonSerializer.Serialize(item.Headers);
+        var serializedHeaders = item.Headers == null ? null : System.Text.Json.JsonSerializer.Serialize(item.Headers);
         activity?.AddEvent(new ActivityEvent("Headers packaged for storage", DateTimeOffset.UtcNow));
         var command = _sqliteDb.CreateCommand();
         command.CommandText =
@@ -77,8 +77,8 @@ public class StorageInboxSqlite : IStorageInbox
             ON CONFLICT (kvKey) DO UPDATE SET kvValue=excluded.kvValue, kvHeaders=excluded.kvHeaders;
         ";
         command.Parameters.AddWithValue("$k", item.Key);
-        command.Parameters.AddWithValue("$v", item.Value);
-        command.Parameters.AddWithValue("$h", serializedHeaders);
+        command.Parameters.AddWithValue("$v", item.Value ?? (object) DBNull.Value);
+        command.Parameters.AddWithValue("$h", serializedHeaders ?? (object) DBNull.Value);
         activity?.AddEvent(new ActivityEvent("Command created", DateTimeOffset.UtcNow));
         var rowsAffected = command.ExecuteNonQuery();
         activity?.AddEvent(new ActivityEvent("Command executed", DateTimeOffset.UtcNow));
@@ -110,11 +110,15 @@ public class StorageInboxSqlite : IStorageInbox
             while (reader.Read())
             {
                 activity?.AddEvent(new ActivityEvent("Row retrieved", DateTimeOffset.UtcNow));
-                var valueRaw = reader.GetStream(0);
-                var headersSerialized = reader.GetString(1);
+                var valueRaw = reader.IsDBNull(0) ? null : reader.GetStream(0);
+                var headersSerialized = reader.IsDBNull(1) ? null : reader.GetString(1);
 
-                byte[] valueConverted = [];
-                if (valueRaw is MemoryStream stream)
+                byte[]? valueConverted;
+                if (valueRaw == null)
+                {
+                    valueConverted = null;
+                }
+                else if (valueRaw is MemoryStream stream)
                 {
                     valueConverted = stream.ToArray();
                 }
@@ -125,7 +129,7 @@ public class StorageInboxSqlite : IStorageInbox
                     valueConverted = ms.ToArray();
                 }
                 activity?.AddEvent(new ActivityEvent("Start unpackaging headers", DateTimeOffset.UtcNow));
-                var headers = System.Text.Json.JsonSerializer.Deserialize<List<KeyValuePair<string, string>>>(headersSerialized);
+                var headers = headersSerialized == null ? null : System.Text.Json.JsonSerializer.Deserialize<List<KeyValuePair<string, string>>>(headersSerialized);
                 activity?.AddEvent(new ActivityEvent("Done unpackaging headers", DateTimeOffset.UtcNow));
 
                 return (Error: null, RetrievedItem: new DcItem { Key = key, Value = valueConverted, Headers = headers});
@@ -264,8 +268,8 @@ public class StorageInboxSqlite : IStorageInbox
         @"
             CREATE TABLE IF NOT EXISTS keyValueStore (
                 kvKey TEXT NOT NULL PRIMARY KEY,
-                kvValue BLOB NOT NULL,
-                kvHeaders TEXT NOT NULL
+                kvValue BLOB,
+                kvHeaders TEXT
             );
 
             CREATE TABLE IF NOT EXISTS TopicPartitionOffsets (

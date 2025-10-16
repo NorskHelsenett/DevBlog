@@ -35,8 +35,8 @@ public class DcProducerSync: IDcProducer
     public async Task<DataTypes.Error?> Produce(DcItem item)
     {
         // _logger.LogTrace($"Producing message with correlation ID {correlationId}"); // We produce quite a bit the first time this runs, logging individual success feels like it would be too much (read: enable this if there actually ever arises a need for it)
-        using var activity = _activitySource.StartActivity("Producer.Produce");
-
+        using var activity = _activitySource.StartActivity("Producer.Produce", ActivityKind.Producer);
+        activity?.AddTag("variant", "sync");
 
         var message = new Message<string, byte[]?>
         {

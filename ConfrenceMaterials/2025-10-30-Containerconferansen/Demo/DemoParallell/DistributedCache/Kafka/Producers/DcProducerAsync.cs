@@ -63,6 +63,7 @@ public class DcProducerAsync: IDcProducer
                 try
                 {
                     activity?.AddEvent(new ActivityEvent("Trying to produce", DateTimeOffset.UtcNow));
+                    activity?.AddTag("variant", "async");
                     // Do sync over async, this is at least one order of magnitude slower!
                     var produceResult = await _producer.ProduceAsync(_topic, message);
                     if (produceResult.Status == PersistenceStatus.NotPersisted)
