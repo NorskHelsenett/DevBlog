@@ -53,9 +53,9 @@ services:
       KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
       KAFKA_AUTO_OFFSET_RESET: "Earliest"
 
-      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
-      SERVICE_NAME: "DistributedCache1"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      #OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "1SqliteSync"
       DEPLOYMENT_ENVIRONMENT: "dev-laptop"
 
   dc2:
@@ -107,9 +107,9 @@ services:
       KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
       KAFKA_AUTO_OFFSET_RESET: "Earliest"
 
-      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
-      SERVICE_NAME: "DistributedCache2"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      #OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "2SqliteAsync"
       DEPLOYMENT_ENVIRONMENT: "dev-laptop"
 
   dc3:
@@ -161,9 +161,9 @@ services:
       KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
       KAFKA_AUTO_OFFSET_RESET: "Earliest"
 
-      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
-      SERVICE_NAME: "DistributedCache3"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      #OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "3InmemAsync"
       DEPLOYMENT_ENVIRONMENT: "dev-laptop"
 
   dc4:
@@ -215,7 +215,7 @@ services:
       KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
       KAFKA_AUTO_OFFSET_RESET: "Earliest"
 
-      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
-      SERVICE_NAME: "DistributedCache4"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      #OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "4InmemSync"
       DEPLOYMENT_ENVIRONMENT: "dev-laptop"
