@@ -27,23 +27,15 @@ services:
     container_name: set-up-container-mount-area
     volumes:
       - .:/ProjectDir
-    environment:
-      RESET_EVERYTHING: "false"
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         echo '====== Creating Containers Working Directories with gitignore ========='
-        if [ ''$$RESET_EVERYTHING == 'true' ]; then
-          echo 'WARNING: Wiping ALL container data, certificates, everything, and starting fresh!'
-          rm -rf /ProjectDir/ContainerData
-        fi
-
         mkdir -p /ProjectDir/ContainerData
 
         if [ ! -f /ProjectDir/ContainerData/.gitignore ]; then
-          echo 'Creating gitignore so that you dont accidentaly check in container data'
-          echo 'If you want some of the container data checked in, simply add an exception to the gitignore'
+          echo 'Creating gitignore so that you dont accidentally check in container data'
           printf '%s\n' '*' '#!.gitignore' > /ProjectDir/ContainerData/.gitignore
         fi
 
@@ -86,7 +78,7 @@ services:
     user: 1000:1001
     build:
       context: .
-      dockerfile_inline: |
+      dockerfile_inline: | #dockerfile
         FROM debian:stable-slim
 
         RUN apt-get update \
@@ -104,12 +96,10 @@ services:
         condition: service_completed_successfully
     volumes:
       - ./ContainerData:/ContainerData
-    environment:
-      RECREATE_IF_EXISTS: "false"
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         echo '================ Setting Up Variables ============================='
         ENV_NAME='lokalmaskin'
         VALIDITY_DAYS='365'
@@ -125,8 +115,8 @@ services:
         CA_CRT_PATH='/ContainerData/GeneratedCerts/CertificateAuthority/'$$CA_CRT_FILE_NAME
         echo '================ Done Setting Up Variables ========================'
 
-        if [ -f $$CA_CRT_PATH ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
-          echo 'CA CRT file exists, and recreation not set to true, exiting without creating CA'
+        if [ -f $$CA_CRT_PATH ]; then
+          echo 'CA CRT file exists, exiting without creating CA'
           exit 0
         fi
 
@@ -164,7 +154,7 @@ services:
     user: 1000:1001
     build:
       context: .
-      dockerfile_inline: |
+      dockerfile_inline: | #dockerfile
         FROM debian:stable-slim
 
         RUN apt-get update \
@@ -187,7 +177,7 @@ services:
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         if [ -f /ContainerData/GeneratedCerts/Kafka/Brokers/broker1/acl-principal.pfx ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
           echo 'Because Broker1s PFX file exists assuming that all other broker certs also exist, and recreation not set to true, exiting without creating any certs'
           exit 0
@@ -441,7 +431,17 @@ services:
       KAFKA_COMPRESSION_TYPE: "zstd"
       KAFKA_COMPRESSION_ZSTD_LEVEL: "11"
     healthcheck:
-      test: ['CMD', '/bin/bash', '-c', 'cd /kafka/secrets && _JAVA_OPTIONS="-Xmx32M -Xms32M" /opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server broker1:9092 --config ./bootstrap.conf || exit 1']
+      test:
+        - 'CMD'
+        - '/bin/bash'
+        - '-c'
+        - | #shell
+          cd /kafka/secrets && \
+          _JAVA_OPTIONS="-Xmx32M -Xms32M" \
+          /opt/kafka/bin/kafka-cluster.sh cluster-id \
+          --bootstrap-server broker1:9092 \
+          --config ./bootstrap.conf \
+          || exit 1
       start_period: "7s"
       interval: "5s"
       timeout: "10s"
@@ -589,7 +589,7 @@ services:
     user: 1000:1001
     build:
       context: .
-      dockerfile_inline: |
+      dockerfile_inline: | #dockerfile
         FROM debian:stable-slim
 
         RUN apt-get update \
@@ -612,7 +612,7 @@ services:
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         if [ -f /ContainerData/GeneratedCerts/Kafka/Users/admin/acl-principal.pfx ] && [ ''$$RECREATE_IF_EXISTS != 'true' ]; then
           echo 'Admin users pfx file exists assuming that all other user certs also exist, and recreation not set to true, exiting without creating any certs'
           exit 0
@@ -758,7 +758,7 @@ services:
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         cd /kafka/secrets
 
         function CreateProduceAcl {
@@ -863,7 +863,7 @@ services:
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         cd /kafka/secrets
 
         # blocks until kafka is reachable
@@ -929,7 +929,7 @@ services:
     # user: 1000:1001
     build:
       context: .
-      dockerfile_inline: |
+      dockerfile_inline: | #dockerfile
         FROM debian:stable-slim
 
         RUN apt-get update \
@@ -1041,7 +1041,7 @@ services:
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #shell
         function AddSchemaToRegistry {
           while [ $$# -gt 0 ]; do
             case "$$1" in
@@ -1190,7 +1190,7 @@ services:
     entrypoint:
       - '/bin/bash'
       - '-c'
-      - |
+      - | #yaml
         echo '================ Creating directory structure ============================='
         mkdir -p /ContainerData/ObservabilityStackConfig
         cd /ContainerData/ObservabilityStackConfig
