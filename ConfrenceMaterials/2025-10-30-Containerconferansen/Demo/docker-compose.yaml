@@ -826,6 +826,9 @@ services:
         CreateConsumeAcl --topic "cadastre-matrikkel-vegadresse-processed" --principal "address-refiner" --group "address-refiner-group"
         CreateProduceAcl --topic "cadastre-matrikkel-vegadresse-processed" --principal "address-refiner"
 
+        CreateConsumeAcl --topic "cadastre-matrikkel-vegadresse-processed-async" --principal "address-refiner" --group "address-refiner-group-async"
+        CreateProduceAcl --topic "cadastre-matrikkel-vegadresse-processed-async" --principal "address-refiner"
+
         CreateConsumeAcl --topic "cadastre-matrikkel-vegadresse-processed" --principal "address-web-api" --group "address-web-api-group"
 
         CreateProduceAcl --topic "distributed-cache" --principal "distributed-cache"
@@ -892,6 +895,7 @@ services:
 
         CreateTopic "cadastre-matrikkel-vegadresse-raw" "delete"
         CreateTopic "cadastre-matrikkel-vegadresse-processed" "compact"
+        CreateTopic "cadastre-matrikkel-vegadresse-processed-async" "compact"
         CreateTopic "distributed-cache" "compact"
 
   schema-registry:
@@ -1090,6 +1094,7 @@ services:
 
         AddSchemaToRegistry --name "cadastre-matrikkel-vegadresse-raw-value" --value "$$SCHEMA_DEFINITION_CADASTRE_RAW_VALUE" --type "PROTOBUF"
         AddSchemaToRegistry --name "cadastre-matrikkel-vegadresse-processed-value" --value "$$SCHEMA_DEFINITION_CADASTRE_REFINED_VALUE" --type "PROTOBUF"
+        AddSchemaToRegistry --name "cadastre-matrikkel-vegadresse-processed-async-value" --value "$$SCHEMA_DEFINITION_CADASTRE_REFINED_VALUE" --type "PROTOBUF"
 
   kafka-ui:
     image: ncr.sky.nhn.no/ghcr/kafbat/kafka-ui
