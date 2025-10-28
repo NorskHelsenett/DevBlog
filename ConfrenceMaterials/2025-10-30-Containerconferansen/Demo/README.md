@@ -26,7 +26,10 @@ ToDo: Drawing or something for the textually impaired
 ToDo:
 - Consider moving this to the top level readme?
 - Link kafka mtls repo
+  - https://github.com/NorskHelsenett/Kafka
 - Link otel rate limiting blogpost
+  - https://medium.com/norsk-helsenett/scaling-local-observability-ca9249cd69a1
 - Link sibling repo entry offentlig paas fagdag otel presentation
+  - https://github.com/NorskHelsenett/DevBlog/tree/main/ConfrenceMaterials/2025-09-02-Offentlig_PaaS_Fagdag_Trondheim
   - Mention the additional helm charts setup not found in this demo
--
+
