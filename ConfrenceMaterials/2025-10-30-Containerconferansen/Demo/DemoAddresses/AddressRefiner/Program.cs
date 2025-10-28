@@ -20,7 +20,17 @@ switch (configuredAddressStorageType)
         break;
 }
 
-builder.Services.AddSingleton<RefinedAddressStreamProducer>();
+var configuredKafkaProduceAsync = Environment.GetEnvironmentVariable(ADDRESS_REFINER_KAFKA_PRODUCE_ASYNC)?.ToLowerInvariant();
+switch (configuredKafkaProduceAsync)
+{
+    case "true":
+        builder.Services.AddSingleton<IRefinedAddressStreamProducer, RefinedAddressStreamProducerAsync>();
+        break;
+    case "false":
+    default:
+        builder.Services.AddSingleton<IRefinedAddressStreamProducer, RefinedAddressStreamProducer>();
+        break;
+}
 builder.Services.AddHostedService<RefinedAddressStreamConsumer>();
 builder.Services.AddHostedService<RawAddressStreamConsumer>();
 

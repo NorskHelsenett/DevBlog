@@ -12,13 +12,13 @@ public class RawAddressStreamConsumer : BackgroundService
     private readonly ILogger<RawAddressStreamConsumer> _logger;
     private readonly ActivitySource _activitySource;
     private readonly IAddressStorage _addressStorage;
-    private readonly RefinedAddressStreamProducer _refinedAddressStreamProducer;
+    private readonly IRefinedAddressStreamProducer _refinedAddressStreamProducer;
     private readonly string _topic;
     private readonly string _bootstrapServersMetadata;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
     private readonly Counter<long> _successCounter;
 
-    public RawAddressStreamConsumer(ILogger<RawAddressStreamConsumer> logger, ActivitySource activitySource, Meter meter, IAddressStorage addressStorage, RefinedAddressStreamProducer refinedAddressStreamProducer, IHostApplicationLifetime hostApplicationLifetime)
+    public RawAddressStreamConsumer(ILogger<RawAddressStreamConsumer> logger, ActivitySource activitySource, Meter meter, IAddressStorage addressStorage, IRefinedAddressStreamProducer refinedAddressStreamProducer, IHostApplicationLifetime hostApplicationLifetime)
     {
         _logger = logger;
         _activitySource = activitySource;

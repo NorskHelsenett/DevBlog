@@ -59,7 +59,7 @@ services:
     networks:
       - apps_network
     ports:
-      - "4080:80"
+      - "4081:80"
     user: 1000:1001
     build:
       context: AddressRefiner
@@ -75,6 +75,8 @@ services:
 
       ADDRESS_REFINER_KAFKA_TOPIC_RAW_ADDRESSES: "cadastre-matrikkel-vegadresse-raw"
       ADDRESS_REFINER_KAFKA_TOPIC_REFINED_ADDRESSES: "cadastre-matrikkel-vegadresse-processed"
+
+      ADDRESS_REFINER_KAFKA_PRODUCE_ASYNC: "false"
 
       # kafkal config
       KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
@@ -97,12 +99,57 @@ services:
       SERVICE_NAME: "AddressRefiner"
       DEPLOYMENT_ENVIRONMENT: "dev-laptop"
 
+  address-refiner-async:
+    image: localhost/address-refiner
+    networks:
+      - apps_network
+    ports:
+      - "4082:80"
+    user: 1000:1001
+    build:
+      context: AddressRefiner
+      dockerfile: Dockerfile
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/address-refiner:/kafka/secrets
+    environment:
+      ASPNETCORE_URLS: "http://+:80"
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      ADDRESS_REFINER_KAFKA_TOPIC_RAW_ADDRESSES: "cadastre-matrikkel-vegadresse-raw"
+      ADDRESS_REFINER_KAFKA_TOPIC_REFINED_ADDRESSES: "cadastre-matrikkel-vegadresse-processed-async"
+
+      ADDRESS_REFINER_KAFKA_PRODUCE_ASYNC: "true"
+
+      # kafkal config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all" # ~ 8µs
+      # KAFKA_ACKS: "leader" # ~35ms
+      # KAFKA_ACKS: "none" # ~5ms
+      KAFKA_GROUP_ID: "address-refiner-group-async"
+      KAFKA_CLIENT_ID: "the-asyncest-refiner-instance"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "false"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-lgtm-stack:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://opentelemetry-collector:4317
+      SERVICE_NAME: "AddressRefinerAsync"
+      DEPLOYMENT_ENVIRONMENT: "dev-laptop"
+
   address-web-api:
     image: localhost/address-web-api
     networks:
       - apps_network
     ports:
-      - "4081:80"
+      - "4080:80"
     user: 1000:1001
     build:
       context: AddressWebApi

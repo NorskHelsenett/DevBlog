@@ -1,14 +1,14 @@
 using System.Diagnostics;
 using System.Diagnostics.Metrics;
-using Confluent.Kafka.SyncOverAsync;
-using No.Nhn.Address.Cadastre.Road;
 using Confluent.Kafka;
+using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry;
 using Confluent.SchemaRegistry.Serdes;
+using No.Nhn.Address.Cadastre.Road;
 
 namespace AddressRefiner;
 
-public class RefinedAddressStreamProducer: IRefinedAddressStreamProducer
+public class RefinedAddressStreamProducerAsync: IRefinedAddressStreamProducer
 {
     private readonly ILogger<RefinedAddressStreamProducer> _logger;
     private readonly ActivitySource _activitySource;
@@ -17,7 +17,7 @@ public class RefinedAddressStreamProducer: IRefinedAddressStreamProducer
     private readonly IProducer<string, CadastreRoadAddress?> _producer;
     private readonly string _topic;
 
-    public RefinedAddressStreamProducer(ILogger<RefinedAddressStreamProducer> logger, ActivitySource activitySource, Meter meter)
+    public RefinedAddressStreamProducerAsync(ILogger<RefinedAddressStreamProducer> logger, ActivitySource activitySource, Meter meter)
     {
         _logger = logger;
         _activitySource = activitySource;
@@ -75,19 +75,18 @@ public class RefinedAddressStreamProducer: IRefinedAddressStreamProducer
                 try
                 {
                     activity?.AddEvent(new ActivityEvent("Trying to produce", DateTimeOffset.UtcNow));
-                    // var produceResult = await _producer.ProduceAsync(_topic, message);
-                    _producer.Produce(_topic, message, report =>
+                    var produceResult = await _producer.ProduceAsync(_topic, message);
+                    // _producer.Produce(_topic, message, report =>
+                    // {
+                    // });
+                    if (produceResult.Status == PersistenceStatus.NotPersisted)
                     {
-                        if (report.Status == PersistenceStatus.NotPersisted)
-                        {
-                            _logger.LogError("{LogEvent}", new {component = nameof(RefinedAddressStreamProducer), method = nameof(Produce), correlationId = $"{correlationId}", addressId = key, timeStamp = $"{DateTime.UtcNow:u}", persistenceStatus = "NotPersisted", message = "Producing event resulted in unexpected persistence status" });
-                        }
-                        else if (report.Status == PersistenceStatus.PossiblyPersisted)
-                        {
-                            _logger.LogWarning("{LogEvent}", new {component = nameof(RefinedAddressStreamProducer), method = nameof(Produce), correlationId = $"{correlationId}", addressId = key, timeStamp = $"{DateTime.UtcNow:u}", persistenceStatus = "PossiblyPersisted", message = "Producing event resulted in unexpected persistence status" });
-                        }
-
-                    });
+                        _logger.LogError("{LogEvent}", new {component = nameof(RefinedAddressStreamProducer), method = nameof(Produce), correlationId = $"{correlationId}", addressId = key, timeStamp = $"{DateTime.UtcNow:u}", persistenceStatus = "NotPersisted", message = "Producing event resulted in unexpected persistence status" });
+                    }
+                    else if (produceResult.Status == PersistenceStatus.PossiblyPersisted)
+                    {
+                        _logger.LogWarning("{LogEvent}", new {component = nameof(RefinedAddressStreamProducer), method = nameof(Produce), correlationId = $"{correlationId}", addressId = key, timeStamp = $"{DateTime.UtcNow:u}", persistenceStatus = "PossiblyPersisted", message = "Producing event resulted in unexpected persistence status" });
+                    }
                     activity?.AddEvent(new ActivityEvent("Produce result received", DateTimeOffset.UtcNow));
                     notSent = false;
                     activity?.AddEvent(new ActivityEvent("Produce result evaluated, done now", DateTimeOffset.UtcNow));
@@ -130,7 +129,7 @@ public class RefinedAddressStreamProducer: IRefinedAddressStreamProducer
         }
     }
 
-    ~RefinedAddressStreamProducer()
+    ~RefinedAddressStreamProducerAsync()
     {
         _logger.LogDebug("Kafka producer finalizer called.");
         try
