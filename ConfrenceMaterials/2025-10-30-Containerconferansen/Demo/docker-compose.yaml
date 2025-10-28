@@ -1097,7 +1097,7 @@ services:
         AddSchemaToRegistry --name "cadastre-matrikkel-vegadresse-processed-async-value" --value "$$SCHEMA_DEFINITION_CADASTRE_REFINED_VALUE" --type "PROTOBUF"
 
   kafka-ui:
-    image: ncr.sky.nhn.no/ghcr/kafbat/kafka-ui
+    image: ghcr.io/kafbat/kafka-ui
     hostname: kafka-ui
     container_name: kafka-ui
     user: 1000:1001
@@ -1151,6 +1151,8 @@ services:
 
   otel-lgtm-stack:
     image: grafana/otel-lgtm
+    profiles:
+      - lgtmimg
     ports:
       - 3001:3000
       # - 4317:4317
@@ -1639,7 +1641,6 @@ services:
       - apps_network
     volumes:
       - ./ContainerData/ObservabilityStackConfig/grafana-loki/config.yaml:/etc/config.yaml
-      # - ./ContainerData/OtelGrafana/loki/storage:/tmp/loki
   grafana-mimir:
     # image: grafana/mimir:2.17.1
     image: grafana/mimir:latest
@@ -1666,7 +1667,6 @@ services:
       - apps_network
     volumes:
       - ./ContainerData/ObservabilityStackConfig/grafana-tempo/config.yaml:/etc/config.yaml
-      # - ./ContainerData/OtelGrafana/tempo/data:/tmp/tempo
   opentelemetry-collector:
     image: otel/opentelemetry-collector-contrib:latest
     # image: otel/opentelemetry-collector-contrib:0.135.0
@@ -1684,4 +1684,3 @@ services:
       - grafana-mimir
       - grafana-tempo
       - create-observability-stack-configs
-      - otel-lgtm-stack
