@@ -1,0 +1,155 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: demo-eso-store-role
+  # No need to specify namespace, cluster roles are not namespace bound
+rules:
+  - apiGroups: [""]
+    resources:
+      - secrets
+    # "Get", "list", and "watch" are needed for read access
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  # This will allow the role `eso-store-role` to perform **permission reviews** for itself within the defined namespace:
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - selfsubjectrulesreviews # used to review or fetch the list of permissions a user or service account currently has.
+    verbs:
+      - create # `create` allows creating a `selfsubjectrulesreviews` request.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: demo-eso-service-account
+  namespace: demo-external-secrets-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: demo-bind-eso-store-role-to-eso-service-account
+  # No need to specify namespace, cluster roles are cluster wide
+subjects:
+  - kind: ServiceAccount
+    name: demo-eso-service-account
+    namespace: demo-external-secrets-operator
+roleRef:
+  kind: ClusterRole
+  name: demo-eso-store-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: demo-eso-cluster-secret-store
+  # No need to specify namespace, cluster resource is cluster wide
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: demo-eso-secret-storage
+      # Using a serviceAccount that can read the source secret
+      auth:
+        serviceAccount:
+          name: demo-eso-service-account
+          namespace: demo-external-secrets-operator
+      server:
+        url: kubernetes.default
+        caProvider:
+          # By magiv exists by default
+          type: ConfigMap
+          name: kube-root-ca.crt
+          namespace: demo-external-secrets-operator
+          key: ca.crt
+---
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: demo-eso-app-restriction-specific-password-generator
+  namespace: demo-eso-secret-storage
+spec:
+  length: 42
+  digits: 5
+  symbols: 5
+  symbolCharacters: "-_$@"
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: demo-pushsecret-app-password
+  namespace: demo-eso-secret-storage # Same NS as generator resource
+spec:
+  # refreshInterval: 6h0m0s # Doesn't work
+  # updatePolicy: IfNotExists # Doesn't work
+  refreshInterval: "0"
+  secretStoreRefs:
+    - name: demo-eso-cluster-secret-store
+      kind: ClusterSecretStore
+  selector:
+    generatorRef:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: demo-eso-app-restriction-specific-password-generator # Matches generator name defined above
+  data:
+    - match:
+        secretKey: password # property in the generator output
+        remoteRef:
+          remoteKey: app-password-secret # Remote reference (where the secret is going to be pushed)
+          property: app-password-secret-key # the property to use to push into
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: demo-eso-create-secret-for-use-by-app
+  namespace: demo-where-app-lives # where you want the new secret
+spec:
+  refreshPolicy: CreatedOnce
+  secretStoreRef:
+    name: demo-eso-cluster-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: demo-app-credentials
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth # Note that this type is because the inspiration of this post is from cnpg use, regular secret would have type Opaque as demonstrated in secret below
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: 'apps-username-for-instance'
+        password: '{{ .retrievedpassword }}' # Helm escaped variant: '{{"{{ .retrievedpassword }}"}}'
+  data:
+    - secretKey: retrievedpassword # Key used for lookup in templating above in target section
+      remoteRef:
+        key: app-password-secret
+        property: app-password-secret-key
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: demo-eso-create-alternative-secret-for-use-by-app
+  namespace: demo-where-app-lives # where you want the new secret
+spec:
+  refreshPolicy: CreatedOnce
+  secretStoreRef:
+    name: demo-eso-cluster-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: demo-alternative-app-credentials
+    # creationPolicy: Owner
+    template:
+      type: Opaque
+      data:
+        connectionString: 'you would put our secret {{ .retrievedpassword }} in a thing like this?' # Helm escaped variant: 'you would put our secret {{"{{ .retrievedpassword }}"}} in a thing like this?'
+  data:
+    - secretKey: retrievedpassword # Key used for lookup in templating above in target section
+      remoteRef:
+        key: app-password-secret
+        property: app-password-secret-key

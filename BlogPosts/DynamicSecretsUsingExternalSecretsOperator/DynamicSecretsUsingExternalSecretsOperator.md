@@ -58,7 +58,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
   name: bind-eso-store-role-to-eso-service-account
-  namespace: external-secrets-operator
+  # No need to specify namespace, cluster roles are cluster wide
 subjects:
   - kind: ServiceAccount
     name: eso-service-account
@@ -77,7 +77,7 @@ apiVersion: external-secrets.io/v1
 kind: ClusterSecretStore
 metadata:
   name: eso-cluster-secret-store
-  namespace: external-secrets-operator # any ns; the store can target multi‑svcAccount
+  # No need to specify namespace, cluster resource is cluster wide
 spec:
   provider:
     kubernetes:
@@ -129,7 +129,6 @@ metadata:
   name: pushsecret-app-password
   namespace: eso-secret-storage # Same NS as generator resource
 spec:
-  # refreshInterval: 6h0m0s # Doesn't work
   # updatePolicy: IfNotExists # Doesn't work
   refreshInterval: "0"
   secretStoreRefs:
@@ -166,7 +165,7 @@ spec:
     creationPolicy: Owner
     template:
       data:
-        app-password-secret-key: '{{"{{ .password }}"}}'
+        app-password-secret-key: '{{"{{ .password }}"}}' # Note this is helm escaped
   dataFrom:
     - sourceRef:
         generatorRef:
@@ -186,7 +185,7 @@ metadata:
   name: eso-create-secret-for-use-by-app
   namespace: where-app-lives # where you want the new secret
 spec:
-  # refreshInterval: 1h                     # how often to re‑read
+  # refreshInterval: 1h
   refreshPolicy: CreatedOnce
   secretStoreRef:
     name: eso-cluster-secret-store
@@ -195,20 +194,24 @@ spec:
     name: app-credentials
     creationPolicy: Owner
     template:
-      # ToDo: consider expanding on metadata if using e.g. pg together with other app?
-      type: kubernetes.io/basic-auth
-      metadata:
-        labels:
-          cnpg.io/reload: "true"
+      type: Opaque
+      # metadata:
+      #   labels:
+      #     custom: "You can put things here if needed"
+      #     optional: "But you don't need to include this section at all if you don't need it"
       data:
-        username: 'apps-username-for-instance'
-        password: '{{"{{ .retrievedpassword }}"}}'
+        someKey: 'For reasons our app wants a static non-secret thing stored here'
         connectionString: 'you would put our secret {{"{{ .retrievedpassword }}"}} in a thing like this?'
+        coolFact: 'Note that you dont need to mess around with base64 encoding!'
   data:
-    - secretKey: retrievedpassword # key in *target* secret
+    - secretKey: retrievedpassword # Key used for lookup in templating above in target section
       remoteRef:
         key: app-password-secret
-        property: app-password-secret-key
+        property: app-password-secret-key # Key used in secret we extract from
 ```
+
+If you need more secrets using the same password, say for instance you back grafana with a cnpg database in your cluster, and want both to use the same auto generated password, you can simply deploy several externalsecrets like the one shown above, all referring to the same generated password stored in the secret store.
+
+Using something like [Reloader](https://github.com/stakater/Reloader/tree/master) to restart grafana after secret has been rotated so that we don't need the createdOnce crutches is left for a future text so that this doesn't become insanely long. (Same goes for stricter namesace permission segregation for those not running in a one-app-per-cluster-with-namespaces-as-convenience setting like us.)
 
 Share and enjoy!
