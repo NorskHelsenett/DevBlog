@@ -86,7 +86,7 @@ metadata:
   name: demo-pushsecret-app-password
   namespace: demo-eso-secret-storage # Same NS as generator resource
 spec:
-  # refreshInterval: 6h0m0s # Doesn't work
+  # refreshInterval: 6h0m0s # Doesn't work (just commenting this out)
   # updatePolicy: IfNotExists # Doesn't work
   refreshInterval: "0"
   secretStoreRefs:

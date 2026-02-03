@@ -1,41 +1,17 @@
-Dynamic secrets locally in Kubernetes
-===
-
-This post will explore how to use the [Externla Secrets Operator](https://external-secrets.io/) (ESO) to manage secrets purely internally within a Kubernetes cluster.
-
-This being a use-case that sounds counter intuitive might explain the lack of documentation guiding you through it. Hence this writeup. It also merits a quick look at the background for doing this.
-
-# Background
-
-Our needs originate in running code in Kubernetes, and wanting to limit access to certain parts of it, while also giving other components access to use restricted pieces of other code. Often this manifests as us wanting to use a service outside of our cluster and needing a secret the program we run can use to access the external service. Or conversely we exposing such a service from our cluster, and needing some secret material to verify the inbound traffic. A concrete example would be needing a secret to connect to an externally managed database. Another would be running a component with a webhook relying on a shared secret to authenthorize the inbound request.
-
-In this case, using a secret management solution with an external interface like [OpenBao](https://openbao.org/) would be a good idea, as it makes it easy/hard to mess up stuffing in updated secrets and extracting those you need to share.
-
-However, sometimes the components you want to plug together cohabitate in the same Kubernetes cluster, and have no need of being reachable from the outside, or reaching out themselves. Like for instance a [PostgreSQL](https://cloudnative-pg.io/) database backing a Grafana pod. In this use-case you'd want to have a login for the database to protect it from accidental use from the wrong components in the cluster messing up it's state, and to protect it in the case of a mis-configuration exposing it out of the Kubernetes cluster. However, storing the secret in an external vault would not really make a difference, beyond introducing an additional place it could leak from, and where retrieval could fail.
-
-Then you compound this with our weirdness, where we have separate Kubernetes clusters per product. This is not frightfully expensive because they are on-prem in our own datacenters. And it has the interesting consequences that not only is the amount of damage you can do highly limited to one product at a time, but also that namespacing components becomes more like scoping in code, in that it is used primarily to make it easier to reason about availability/reachability when working with the system, rather than being used as a security boundary.
-
-<!-- Add into the mix that our setup is built around separate Kubernetes clusters per product, and we have the perfect recipe for what comes next. -->
-And at this point we have the perfect recipe for what comes next.
-
-# Using ESO to manage dynamic secrets locally within our Kubernetes cluster
-
-
-
 Secrets good.
 Kubernetes good.
 Dynamic secrets good.
 Vaults good. Make extracting and editing easy/hard to do very wrong.
 Putting secrets more places than needed not good. What about dynamic secrets only needed within the cluster?
-Dynamic secrets natively in Kubernetes using helm eh when using argo (link issue?).
+Dynamic secrets natively in kubernetes using helm eh when using argo (link issue?).
 
 If ESO usable as external dependency, can we use ESO without the unneeded external component?
 Actually yes, even though documentation mostly guides you through other variants. I.e. manage a collection within a cluster not focused on and not very straightforward.
 
-Need ESO in Kubernetes. Easy and well documented, look up the install yourself. Maybe put argo app example here though? Nah.
+Need ESO in kubernetes. Easy and well documented, look up the install yourself. Maybe put argo app example here though? Nah.
 ESO needs permissions to create, view, and edit secrets for our approach to work.
 Our context doesn't need restricted access to secrets between namespaces for security, namespacing purely for manageability.
-Therefore make Kubernetes cluster role for ESO with full access to all secrets in cluster for ESO to use:
+Therefore make kubernetes cluster role for ESO with full access to all secrets in cluster for ESO to use:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -104,7 +80,7 @@ metadata:
   # No need to specify namespace, cluster resource is cluster wide
 spec:
   provider:
-    Kubernetes:
+    kubernetes:
       remoteNamespace: eso-secret-storage
       # Using a serviceAccount that can read the source secret
       auth:
@@ -112,7 +88,7 @@ spec:
           name: eso-service-account
           namespace: external-secrets-operator
       server:
-        url: Kubernetes.default
+        url: kubernetes.default
         caProvider:
           # By magiv exists by default
           type: ConfigMap
