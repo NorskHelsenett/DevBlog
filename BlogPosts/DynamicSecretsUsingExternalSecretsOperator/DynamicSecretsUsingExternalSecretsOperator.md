@@ -15,27 +15,19 @@ However, sometimes the components you want to plug together cohabitate in the sa
 
 Then you compound this with our weirdness, where we have separate Kubernetes clusters per product. This is not frightfully expensive because they are on-prem in our own datacenters. And it has the interesting consequences that not only is the amount of damage you can do highly limited to one product at a time, but also that namespacing components becomes more like scoping in code, in that it is used primarily to make it easier to reason about availability/reachability when working with the system, rather than being used as a security boundary.
 
-<!-- Add into the mix that our setup is built around separate Kubernetes clusters per product, and we have the perfect recipe for what comes next. -->
-And at this point we have the perfect recipe for what comes next.
+Finally, ESO is easily available, and already approved of by the organization.
+
+Given this background, let's take a look at the solution.
 
 # Using ESO to manage dynamic secrets locally within our Kubernetes cluster
 
+What we want to do here today is deploy something to kubernetes, that will generate a password-like mess of bytes, which we can shove into one or more secrets, that our application(s) running in kubernetes can use internally. Because we have ESO available, we're going to create a setup like illustrated below. An in cluster secret store, a password grenerator used by a push secret to put a new password in the store, and an external secret to extract it and make it available for use in a plain kubernetes secret.
 
+![Visualization for the verbally impaired](./2026-02-04-EsoInClusterSecrets.png)
 
-Secrets good.
-Kubernetes good.
-Dynamic secrets good.
-Vaults good. Make extracting and editing easy/hard to do very wrong.
-Putting secrets more places than needed not good. What about dynamic secrets only needed within the cluster?
-Dynamic secrets natively in Kubernetes using helm eh when using argo (link issue?).
+We're not going to cover how to install/deploy ESO to a kubernetes cluster, that one-liner is written about enough other places, like for instance [ESO's getting started guide](https://external-secrets.io/main/introduction/getting-started/).
 
-If ESO usable as external dependency, can we use ESO without the unneeded external component?
-Actually yes, even though documentation mostly guides you through other variants. I.e. manage a collection within a cluster not focused on and not very straightforward.
-
-Need ESO in Kubernetes. Easy and well documented, look up the install yourself. Maybe put argo app example here though? Nah.
-ESO needs permissions to create, view, and edit secrets for our approach to work.
-Our context doesn't need restricted access to secrets between namespaces for security, namespacing purely for manageability.
-Therefore make Kubernetes cluster role for ESO with full access to all secrets in cluster for ESO to use:
+The first thing we need is a good old fashioned kubernetes cluster role. This is what we'll use to allow the ClusterSecretStore to retrieve the stored secrets once our external secrets ask for them. Because we're setting it up as an in-cluster secret store which we push newly created secrets into for it to manage, the cluster role also needs access to create and later mess with the stored secrets, hence the long list following the `get`, `list`, and `watch` permissions.
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -65,7 +57,7 @@ rules:
       - create # `create` allows creating a `selfsubjectrulesreviews` request.
 ```
 
-For ESO to use role, need account to assign role to:
+For the ESO cluster store to be able to use the role we created above, we need a service account to bind it to:
 
 ```yaml
 apiVersion: v1
@@ -75,7 +67,7 @@ metadata:
   namespace: external-secrets-operator
 ```
 
-Once have role and account, need to glue them together:
+Now that we have the role and account, we glue them together with a ClusterRoleBinding like this:
 
 ```yaml
 apiVersion: rbac.authorization.k8s.io/v1
@@ -93,7 +85,7 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 ```
 
-After permissions established, can create SecretStore storage place that can be used to put generated secrets in to, and fetched from when creating secrets based on those stored:
+After the permissions have been established, we can create the SecretStore that we will feed with the created secrets which we can reference from other contexts:
 
 ```yaml
 # secretstore-cluster-k8s.yaml
@@ -121,9 +113,9 @@ spec:
           key: ca.crt
 ```
 
-Note in this in cluster setup, eso store is only a namespace with secrets. No actual need to push things at store, every secret in namespace will be possible to extract with reference to store. But works better to push should you ever wish to expand to external resting place.
+Note in this in cluster setup, the ESO store is only a namespace with secrets. There is no actual need to push things at store, every secret in the chosen namespace will be possible to extract by referencing the store. However, should you ever need to support an external store, this approach should give you fewer things you absolutely need to change or set up differently.
 
-Need ESO generator to dynamically generate things, for instance password-like things:
+At this point we need something to generate our secrets, for which the ESO project kindly supplies a generator resource:
 
 ```yaml
 apiVersion: generators.external-secrets.io/v1alpha1
@@ -140,11 +132,9 @@ spec:
   allowRepeat: true
 ```
 
-Note generator needs to be in namespace where externalsecret/pushsecret that does the generation is.
+Note that this generator resource needs to be in the namespace where the externalsecret/pushsecret which does the generation lives in.
 
-Beware structure of push secret. `SecertStoreRef: {}` in our case refers to the ClusterSecretStore, which is the one determining which namespace generated data is stored in. `selector: {}` used to obtain secret data to stuff in store. `data: {}` determines where in the secret store the new secret is stored (in our case in a secret specified in `remoteKey: ""`, under key specified in `property`).
-
-Example
+When we go on to generate our password, beware the structure of the push secret resource. The `SecertStoreRef: {}` object in our case refers to the ClusterSecretStore, which is the one determining which namespace generated data is stored in. `selector: {}` used to obtain the secret data to stuff in the store. `data: {}` determines where in the secret store the new secret is stored (in our case in a secret specified in `remoteKey: ""`, under key specified in `property`).
 
 ```yaml
 apiVersion: external-secrets.io/v1alpha1
@@ -153,7 +143,7 @@ metadata:
   name: pushsecret-app-password
   namespace: eso-secret-storage # Same NS as generator resource
 spec:
-  # updatePolicy: IfNotExists # Doesn't work
+  # updatePolicy: IfNotExists # Doesn't work if you want it to not change after creation
   refreshInterval: "0"
   secretStoreRefs:
     - name: eso-cluster-secret-store
@@ -171,9 +161,9 @@ spec:
           property: app-password-secret-key # the property to use to push into
 ```
 
-Note `refreshInterval: "0"`. Not all things happy with changing secrets. Figuring out if using reloader operator (todo link) or similar viable for your app out of scope here.
+Take note of the `refreshInterval: "0"` entry. Not all things are happy with changing secrets. Figuring out if using [reloader operator](https://github.com/stakater/Reloader/tree/master) or something similar is viable for your app is out of scope here.
 
-Alternative is just dumping new secret in store namespace like this:
+The alternative to using a push secret as illustrated above, is to create the shared password directly in the storage namespace using an ExternalSecret like shown below:
 
 ```yaml
 apiVersion: external-secrets.io/v1
@@ -198,9 +188,9 @@ spec:
           name: eso-app-restriction-specific-password-generator
 ```
 
-Again note `refreshPolicy` ensuring no autorotation. Also be amazed at escaping syntax for accessing property named `password` outputted from generator.
+Again note `refreshPolicy` ensuring no autorotation. Also be amazed at the escaping syntax for accessing property named `password` outputted from generator when you need to escape it for helm (you are using helm, right?).
 
-Once secret is stored, can be made available for use. Is done like shown below:
+Once the secret is stored, it can be made available for a pod to use from a plain kubernetes secret. Is done like so:
 
 ```yaml
 apiVersion: external-secrets.io/v1
@@ -236,6 +226,6 @@ spec:
 
 If you need more secrets using the same password, say for instance you back grafana with a cnpg database in your cluster, and want both to use the same auto generated password, you can simply deploy several externalsecrets like the one shown above, all referring to the same generated password stored in the secret store.
 
-Using something like [Reloader](https://github.com/stakater/Reloader/tree/master) to restart grafana after secret has been rotated so that we don't need the createdOnce crutches is left for a future text so that this doesn't become insanely long. (Same goes for stricter namesace permission segregation for those not running in a one-app-per-cluster-with-namespaces-as-convenience setting like us.)
+Once again, using something like [Reloader](https://github.com/stakater/Reloader/tree/master) to restart grafana after the secret has been rotated so that we don't need the createdOnce crutches is left for a future text, so that this doesn't become insanely long. (Same goes for stricter namesace permission segregation for those not running in a one-app-per-cluster-with-namespaces-as-convenience setting like us.)
 
 Share and enjoy!
