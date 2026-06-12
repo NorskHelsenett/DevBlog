@@ -1,0 +1,42 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://github.com/cloudnative-pg/charts.git
+    targetRevision: {{ .Values.cloudNativePg.version }}
+    chart: cloudnative-pg
+    {{- if .Values.cloudNativePg }}
+    helm:
+      values: {{ .Values.cloudnativepg | toYaml | quote | nindent 8 }}
+    {{- end }}
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    rbac.authorization.k8s.io/aggregate-to-admin: "true"
+  name: cnpg-cr
+rules:
+- apiGroups:
+  - postgresql.cnpg.io
+  resources:
+  - '*'
+  verbs:
+  - '*'

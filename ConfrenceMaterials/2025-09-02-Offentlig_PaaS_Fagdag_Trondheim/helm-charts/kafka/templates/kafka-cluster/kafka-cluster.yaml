@@ -1,0 +1,121 @@
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: controller
+  labels:
+    strimzi.io/cluster: lgtm-kafka-cluster
+spec:
+  replicas: 3
+  roles:
+    - controller
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 1Gi
+        kraftMetadata: shared
+        deleteClaim: false
+---
+
+apiVersion: kafka.strimzi.io/v1beta2
+kind: KafkaNodePool
+metadata:
+  name: broker
+  labels:
+    strimzi.io/cluster: lgtm-kafka-cluster
+spec:
+  replicas: 3
+  roles:
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: {{ .Values.kafka.cluster.brokers.storage.size }}
+        kraftMetadata: shared
+        deleteClaim: false
+  # https://strimzi.io/docs/operators/in-development/configuring.html#con-common-configuration-resources-reference
+  resources:
+    requests:
+      memory: {{ .Values.kafka.cluster.brokers.resources.requests.memory }}
+      cpu: {{ .Values.kafka.cluster.brokers.resources.requests.cpu | quote }}
+    limits:
+      memory: {{ .Values.kafka.cluster.brokers.resources.limits.memory }}
+---
+
+apiVersion: kafka.strimzi.io/v1beta2
+kind: Kafka
+metadata:
+  name: lgtm-kafka-cluster
+spec:
+  kafka:
+    version: 4.1.0
+    metadataVersion: 4.1-IV1
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+      - name: tls
+        port: 9093
+        type: internal
+        tls: true
+    config:
+      offsets.topic.replication.factor: 3
+      transaction.state.log.replication.factor: 3
+      transaction.state.log.min.isr: 2
+      default.replication.factor: 3
+      min.insync.replicas: 2
+      log.retention.hours: {{ .Values.kafka.cluster.brokers.config.defaultTopicRetentionHours }}
+      log.retention.bytes: {{ .Values.kafka.cluster.brokers.config.defaultTopicRetentionBytes }}
+      # https://kafka.apache.org/documentation/#brokerconfigs_compression.type
+      compression.type: {{ .Values.kafka.cluster.brokers.config.compression.type }}
+    template:
+      pod: # (1)
+        securityContext:
+          fsGroup: 10001
+          runAsGroup: 10001
+          runAsNonRoot: true
+          runAsUser: 10001
+          supplementalGroups:
+            - 100
+      kafkaContainer: # (2)
+        securityContext:
+          runAsUser: 10001
+          capabilities:
+            drop:
+              - ALL
+          allowPrivilegeEscalation: false
+          seccompProfile:
+            type: RuntimeDefault
+  entityOperator:
+    template:
+      pod:
+        securityContext:
+          runAsGroup: 1001
+          runAsNonRoot: true
+          runAsUser: 1001
+          seccompProfile:
+            type: RuntimeDefault
+          supplementalGroups:
+            - 100
+      topicOperatorContainer:
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+      userOperatorContainer:
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+              - ALL
+          privileged: false
+          readOnlyRootFilesystem: true
+    topicOperator: {}
+    userOperator: {}

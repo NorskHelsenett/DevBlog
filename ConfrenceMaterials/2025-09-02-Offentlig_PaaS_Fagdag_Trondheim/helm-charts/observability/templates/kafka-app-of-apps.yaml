@@ -1,0 +1,35 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-app-of-apps
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  destination:
+    name: "in-cluster"
+    namespace: {{ .Values.kafka.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+  source:
+    path: kafka-app-of-apps
+    repoURL: "" # https://example.com/this-repo!
+    targetRevision: main
+    helm:
+      valuesObject:
+        argocdProject: {{ .Values.argocdProject }}
+        kafka:
+          namespace: {{ .Values.kafka.namespace }}
+          strimzi:
+            defaultImageRegistry: {{ .Values.kafka.strimzi.defaultImageRegistry }}
+          cluster:
+            brokers:
+              storage:
+                size: {{ .Values.kafka.cluster.brokers.storage.size }}

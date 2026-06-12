@@ -1,0 +1,19 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ .Values.postgresCluster.name }}-podmonitor
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "postgresql-cluster.labels" . | nindent 4 }}
+    # Required for Prometheus Operator discovery
+    release: {{ .Values.postgresCluster.monitoring.podMonitor.prometheusRelease }}
+    {{- with .Values.postgresCluster.monitoring.podMonitor.additionalLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      cnpg.io/cluster: {{ .Values.postgresCluster.name }}
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics

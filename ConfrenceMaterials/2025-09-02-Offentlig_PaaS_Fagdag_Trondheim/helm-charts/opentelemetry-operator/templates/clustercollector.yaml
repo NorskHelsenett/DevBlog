@@ -4,18 +4,30 @@ kind: OpenTelemetryCollector
 metadata:
   name: cluster
 spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - cluster-collector
+          weight: 100
   config:
     receivers:
       prometheus:
         config:
           scrape_configs:
             - job_name: "otel-collector"
-              scrape_interval: {{ coalesce .Values.clusterCollector.scrapeInterval .Values.scrapeInterval }}
+              scrape_interval: {{ .Values.clusterCollector.scrapeInterval }}
               static_configs:
                 - targets:
                     - "0.0.0.0:8888"
     processors:
-      {{- with ( coalesce .Values.clusterCollector.additionalMetricLabels .Values.labels ) }}
+      {{- with .Values.clusterCollector.additionalMetricLabels }}
       attributes:
         actions:
           {{- range $key, $value := . }}
@@ -24,9 +36,6 @@ spec:
             action: insert
           {{- end }}
       {{- end }}
-      batch:
-        send_batch_size: 1024
-        send_batch_max_size: 1024
       memory_limiter:
         check_interval: 5s
         limit_percentage: 80
@@ -40,8 +49,8 @@ spec:
             key_file: /kafka/tls/UserKey.pem
         brokers:
           - {{ .Values.kafka.bootstrapServer | quote }}
-        protocol_version: 2.1.0
-        topic: {{ coalesce .Values.kafka.topics.metrics .Values.kafka.topic | quote }}
+        metrics:
+          topic: {{ .Values.kafka.topics.metrics | quote }}
         producer:
           {{- with .Values.kafka.compression }}
           compression: {{ .type }}
@@ -49,6 +58,15 @@ spec:
             level: {{ .params.level }}
           {{- end }}
           required_acks: 0
+        protocol_version: 2.1.0
+        sending_queue:
+          batch:
+            {{- /*
+            This sets the max size of the batches exported to kafka. We set it to 800 KiB.
+            Setting this to 1MiB causes the messages to be too large for some reason.
+            */}}
+            max_size: 819200
+            sizer: bytes
     extensions:
       health_check:
         endpoint: ${env:MY_POD_IP}:13133
@@ -61,10 +79,9 @@ spec:
             - prometheus
           processors:
             - memory_limiter
-            {{- if ( coalesce .Values.clusterCollector.additionalMetricLabels .Values.labels ) }}
+            {{- if .Values.clusterCollector.additionalMetricLabels }}
             - attributes
             {{- end }}
-            - batch
           exporters:
             - kafka
       telemetry:
@@ -89,6 +106,8 @@ spec:
   observability:
     metrics:
       enableMetrics: true
+      extraLabels:
+        release: prometheus
   podDisruptionBudget:
     maxUnavailable: 1
   podSecurityContext:
@@ -96,8 +115,9 @@ spec:
       type: RuntimeDefault
     supplementalGroups:
       - 100
+  replicas: {{ .Values.clusterCollector.replicas }}
   resources:
-    {{- toYaml ( coalesce .Values.clusterCollector.resources .Values.collector.resources ) | nindent 4 }}
+    {{- toYaml .Values.clusterCollector.resources | nindent 4 }}
   securityContext:
     capabilities:
       drop:
@@ -108,10 +128,24 @@ spec:
     runAsNonRoot: true
     runAsGroup: 10001
   targetAllocator:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - podAffinityTerm:
+              topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - cluster-targetallocator
+            weight: 100
     enabled: true
     observability:
       metrics:
         enableMetrics: true
+        extraLabels:
+          release: prometheus
     podDisruptionBudget:
       maxUnavailable: 1
     podSecurityContext:
@@ -134,8 +168,9 @@ spec:
             values:
               - kube-prometheus-stack-operator
               - kube-prometheus-stack-kubelet
+    replicas: {{ .Values.clusterCollector.targetAllocator.replicas }}
     resources:
-      {{- toYaml ( coalesce .Values.clusterCollector.targetAllocator.resources .Values.targetallocator.resources ) | nindent 6 }}
+      {{- toYaml .Values.clusterCollector.targetAllocator.resources | nindent 6 }}
     securityContext:
       capabilities:
         drop:

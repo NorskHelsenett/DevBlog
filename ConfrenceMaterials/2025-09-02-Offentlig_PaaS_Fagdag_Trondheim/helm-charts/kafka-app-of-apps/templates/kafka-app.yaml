@@ -1,0 +1,31 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  destination:
+    name: "in-cluster"
+    namespace: {{ .Values.kafka.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+  source:
+    path: kafka
+    repoURL: https://example.com/this-repo.git
+    targetRevision: main
+    helm:
+      valuesObject:
+        kafka:
+          cluster:
+            brokers:
+              storage:
+                size: {{ .Values.kafka.cluster.brokers.storage.size }}

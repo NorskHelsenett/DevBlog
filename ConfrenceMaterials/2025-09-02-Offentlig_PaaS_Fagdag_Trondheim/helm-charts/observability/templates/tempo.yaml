@@ -10,14 +10,20 @@ metadata:
 spec:
   project: {{ .Values.argocdProject }}
   source:
-    repoURL: https://grafana.github.io/helm-charts
-    targetRevision: 1.42.3
+    repoURL: https://grafana-community.github.io/helm-charts
+    targetRevision: 2.19.0
     chart: tempo-distributed
+    {{- /* This doesn't work yet with ArgoCd and the registry proxy (or mostly anything except dockerhub
+    repoURL: oci://{{ .Values.registryGhcr }}/grafana-community/helm-charts/tempo-distributed
+    targetRevision: 2.19.0
+    # This path is not used but must be set when using an oci-repo
+    path: "."
+    */}}
     helm:
-      values: |
+      valuesObject:
         global:
           image:
-            registry: container-registry.example.com
+            registry: {{ .Values.registry }}
           extraEnv:
             - name: MY_POD_IP
               valueFrom:
@@ -29,7 +35,8 @@ spec:
             {{- end }}
         tempo:
           image:
-            repository: dockerhub/grafana/tempo
+            registry: {{ .Values.registry }}
+            repository: grafana/tempo
           revisionHistoryLimit: 1
           securityContext:
             seccompProfile:
@@ -54,7 +61,6 @@ spec:
             multitenancy_enabled: true
             usage_report:
               reporting_enabled: false
-            stream_over_http_enabled: true
             server:
               log_level: {{ .Values.logLevel }}
               log_format: {{ .Values.logFormat }}
@@ -75,11 +81,7 @@ spec:
                   flush_to_storage: true
               storage:
                 remote_write:
-                  {{- if .Values.mimir.useGateway }}
-                  - url: http://{{ .Values.mimir.name }}-gateway.{{ .Values.mimir.namespace }}:80/api/v1/push
-                  {{- else }}
-                  - url: http://{{ .Values.mimir.name }}-distributor.{{ .Values.mimir.namespace }}:8080/api/v1/push
-                  {{- end }}
+                  - url: {{ print "http://" .Values.mimirIngest.name "-gateway." .Values.mimirIngest.namespace ":80/api/v1/push" }}
                     send_exemplars: true
             query_frontend:
               search:
@@ -99,10 +101,10 @@ spec:
                 cache_max_block_age: 48h
                 backend: s3
                 s3:
-                  bucket: {{ .Values.bucketPrefix }}tempo-s3-example-secret-name
+                  bucket: {{ .Values.bucketPrefix }}{{ .Values.tempo.name }}
                   endpoint: {{ .Values.s3Endpoint }}
-                  access_key: ${TEMPO_S3_USER_EXAMPLE_KEY_NAME}
-                  secret_key: ${TEMPO_S3_PASSWORD_EXAMPLE_KEY_NAME}
+                  access_key: ${AWS_ACCESS_KEY_ID}
+                  secret_key: ${AWS_SECRET_ACCESS_KEY}
                   forcepathstyle: true
                   tls_insecure_skip_verify: true
             memberlist:
@@ -123,7 +125,7 @@ spec:
             - -config.expand-env=true
           extraEnvFrom:
             - secretRef:
-                name: tempo-s3-example-secret-name-bucket
+                name: {{ .Values.tempo.name }}-bucket
           resources:
             {{- toYaml .Values.tempo.ingester.resources | nindent 12 }}
           persistence:
@@ -143,7 +145,7 @@ spec:
             - -config.expand-env=true
           extraEnvFrom:
             - secretRef:
-                name: tempo-s3-example-secret-name-bucket
+                name: {{ .Values.tempo.name }}-bucket
           resources:
             {{- toYaml .Values.tempo.metricsGenerator.resources | nindent 12 }}
           persistence:
@@ -153,12 +155,12 @@ spec:
             storageClass: {{ . }}
             {{- end }}
         distributor:
-          replicas: 3
+          replicas: {{ .Values.tempo.distributor.replicas }}
           extraArgs:
             - -config.expand-env=true
           extraEnvFrom:
             - secretRef:
-                name: tempo-s3-example-secret-name-bucket
+                name: {{ .Values.tempo.name }}-bucket
           resources:
             {{- toYaml .Values.tempo.distributor.resources | nindent 12 }}
         compactor:
@@ -167,7 +169,7 @@ spec:
             - -config.expand-env=true
           extraEnvFrom:
             - secretRef:
-                name: tempo-s3-example-secret-name-bucket
+                name: {{ .Values.tempo.name }}-bucket
           resources:
             {{- toYaml .Values.tempo.compactor.resources | nindent 12 }}
         querier:
@@ -176,11 +178,13 @@ spec:
             - -config.expand-env=true
           extraEnvFrom:
             - secretRef:
-                name: tempo-s3-example-secret-name-bucket
+                name: {{ .Values.tempo.name }}-bucket
           resources:
             {{- toYaml .Values.tempo.querier.resources | nindent 12 }}
         queryFrontend:
-          replicas: 2
+          image:
+            registry: {{ .Values.registry }}
+          replicas: {{ .Values.tempo.queryFrontend.replicas }}
           autoscaling:
             enabled: false
             targetMemoryUtilizationPercentage: 80
@@ -188,13 +192,13 @@ spec:
             - -config.expand-env=true
           extraEnvFrom:
             - secretRef:
-                name: tempo-s3-example-secret-name-bucket
+                name: {{ .Values.tempo.name }}-bucket
           resources:
             {{- toYaml .Values.tempo.queryFrontend.resources | nindent 12 }}
         rollout_operator:
           enabled: true
           image:
-            repository: {{ .Values.registry }}/grafana/rollout-operator
+            registry: {{ .Values.registry }}
           serviceMonitor:
             enabled: true
             labels:
@@ -205,15 +209,15 @@ spec:
               enabled: true
         memcached:
           image:
-            repository: dockerhub/memcached
-          {{- $memcachedMemory := 1024 }}
+            repository: memcached
+          {{- $memcachedMemory := 256 }}
           extraArgs:
             - -m {{ $memcachedMemory }}
             - -I 5m
             - -c 16384
             - -v
             - -u 1000
-          replicas: 1
+          replicas: {{ .Values.tempo.memcached.replicas }}
           {{- $memcachedRequestMemory := div ( add ( mul $memcachedMemory 12 ) 5 ) 10 }}
           resources:
             requests:
@@ -224,7 +228,7 @@ spec:
         memcachedExporter:
           enabled: true
           image:
-            repository: dockerhub/prom/memcached-exporter
+            repository: prom/memcached-exporter
           resources:
             {{- toYaml .Values.tempo.memcachedExporter.resources | nindent 12 }}
         metaMonitoring:
@@ -241,16 +245,17 @@ spec:
         gateway:
           enabled: {{ .Values.tempo.useGateway }}
           autoscaling:
-            enabled: {{ .Values.tempo.useGateway }}
+            enabled: {{ .Values.tempo.gateway.autoscaling.horizontal.enabled }}
             targetMemoryUtilizationPercentage: 80
           image:
-            repository: dockerhub/nginxinc/nginx-unprivileged
+            repository: nginxinc/nginx-unprivileged
           resources:
             requests:
               cpu: 50m
               memory: 64Mi
             limits:
               memory: 64Mi
+        streamOverHTTPEnabled: true
   destination:
     server: https://kubernetes.default.svc
     namespace: {{ .Values.tempo.namespace }}
@@ -268,13 +273,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.tempo.name "-" . }}
   namespace: {{ $.Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: Deployment
     name: {{ print $.Values.tempo.name "-" . }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.tempo.autoscaling.vertical.updateMode | quote }}
 {{- end }}
 {{- range ( list "metrics-generator" "ingester-zone-a" "ingester-zone-b" "ingester-zone-c" ) }}
 ---
@@ -283,13 +290,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.tempo.name "-" . }}
   namespace: {{ $.Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: StatefulSet
     name: {{ print $.Values.tempo.name "-" . }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.tempo.autoscaling.vertical.updateMode | quote }}
 {{- end }}
 # we don't autoscale memcached memory, it will use what is available. We can however autoscale the memcached-exporter that is used to export metrics to prometheus
 {{- range ( list "memcached" ) }}
@@ -299,13 +308,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.tempo.name "-" . }}
   namespace: {{ $.Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: StatefulSet
     name: {{ print $.Values.tempo.name "-" . }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.tempo.autoscaling.vertical.updateMode | quote }}
   resourcePolicy:
     containerPolicies:
       - containerName: "memcached"

@@ -2390,7 +2390,7 @@
       "repeatIteration": null,
       "repeatRowId": null,
       "showTitle": true,
-      "title": "TSBD Index",
+      "title": "TSDB Index",
       "titleSize": "h6"
     },
     {

@@ -8,18 +8,34 @@ metadata:
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
+  ignoreDifferences:
+    {{- /* Make sure default autoscaling doesn't mess with replica count set by KEDA. */}}
+    - group: apps
+      kind: Deployment
+      name: {{ .Values.loki.name }}-querier
+      jsonPointers:
+        - /spec/replicas
   project: {{ .Values.argocdProject }}
   source:
-    repoURL: https://grafana.github.io/helm-charts
-    targetRevision: 6.34.0
+    repoURL: https://grafana-community.github.io/helm-charts
+    targetRevision: 13.6.1
     chart: loki
+    {{- /* This doesn't work yet with ArgoCd and Harbor (or mostly anything except dockerhub
+    repoURL: oci://{{ .Values.registryGhcr }}/grafana-community/helm-charts/loki
+    targetRevision: 13.6.1
+    # This path is not used but must be set when using an oci-repo
+    path: "."
+    */}}
     helm:
-      values: |
+      valuesObject:
         global:
-          image:
-            registry: {{ .Values.registry }}
+          {{- /* Cannot use this, because we've got images from both dockerhub and ghcr now
+          imageRegistry: {{ .Values.registry }}
+          */}}
+          {{- /* Somebody vibed too hard, it gets passed to canary, so it is not actually scoped to scope: backend, bloom-builder, bloom-gateway, bloom-planner, compactor, distributor, index-gateway, ingester, overrides-exporter, pattern-ingester, querier, query-frontend, query-scheduler, read, ruler, write
           extraArgs:
             - -config.expand-env=true
+          */}}
           extraEnv:
             - name: MY_POD_IP
               valueFrom:
@@ -35,10 +51,20 @@ spec:
           {{- end }}
           extraEnvFrom:
             - secretRef:
-                name: loki-s3-example-secret-name
+                name: {{ .Values.loki.name }}
+        defaults:
+          {{- /* Cant have this here either, for same reason as not in the "global" section
+          extraArgs:
+            - -config.expand-env=true
+          */}}
+          statefulSetRecreateJob:
+            image:
+              registry: {{ .Values.registryK8sio }}
         fullnameOverride: {{ .Values.loki.name }}
         deploymentMode: Distributed
         loki:
+          image:
+            registry: {{ .Values.registry }}
           revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
           podSecurityContext:
             fsGroup: 10001
@@ -56,6 +82,7 @@ spec:
             seccompProfile:
               type: RuntimeDefault
           extraMemberlistConfig:
+            cluster_label: {{ print .Values.loki.name "." .Values.loki.namespace | quote }}
             bind_addr:
               - ${MY_POD_IP}
           server:
@@ -75,8 +102,8 @@ spec:
             type: s3
             s3:
               endpoint: {{ .Values.s3Endpoint }}
-              accessKeyId: ${LOKI_S3_USER_EXAMPLE_KEY_NAME}
-              secretAccessKey: ${LOKI_S3_PASSWORD_EXAMPLE_KEY_NAME}
+              accessKeyId: ${S3_USER}
+              secretAccessKey: ${S3_PASSWORD}
               s3ForcePathStyle: true
               http_config:
                 insecure_skip_verify: true
@@ -107,12 +134,23 @@ spec:
           {{- end }}
         test:
           enabled: true
+          image:
+            registry: {{ .Values.registry }}
         lokiCanary:
           enabled: true
+          image:
+            registry: {{ .Values.registry }}
+          extraArgs: []
           resources:
             {{- toYaml .Values.loki.canary.resources | nindent 12 }}
         gateway:
           enabled: {{ .Values.loki.useGateway }}
+          image:
+            registry: {{ .Values.registry }}
+          metrics:
+            image:
+              registry: {{ .Values.registryGhcr }}
+            extraArgs: []
           autoscaling:
             enabled: {{ .Values.loki.useGateway }}
             minReplicas: 2
@@ -147,12 +185,16 @@ spec:
           replicas: {{ .Values.loki.ingester.replicas }}
           resources:
             {{- toYaml .Values.loki.ingester.resources | nindent 12 }}
+          extraArgs:
+            - -config.expand-env=true
           updateStrategy:
             type: OnDelete
           persistence:
             enabled: true
             claims:
               - name: data
+                accessModes:
+                  - ReadWriteOnce
                 size: 10Gi
                 {{- with .Values.storageClass }}
                 storageClass: {{ . }}
@@ -160,9 +202,12 @@ spec:
           rolloutGroupPrefix: loki
           addIngesterNamePrefix: loki
         distributor:
-          replicas: 3
+          replicas: {{ .Values.loki.distributor.replicas }}
+          maxUnavailable: 2
           resources:
             {{- toYaml .Values.loki.distributor.resources | nindent 12 }}
+          extraArgs:
+            - -config.expand-env=true
           affinity:
             podAntiAffinity:
               requiredDuringSchedulingIgnoredDuringExecution:
@@ -170,40 +215,15 @@ spec:
                     matchLabels:
                       app.kubernetes.io/component: loki-distributor
                   topologyKey: kubernetes.io/hostname
-          maxUnavailable: 2
         querier:
-          autoscaling:
-            enabled: true
-            minReplicas: 2
-            maxReplicas: 22
-            {{- if .Values.prometheusAdapter.enabled }}
-            targetCPUUtilizationPercentage: null
-            customMetrics:
-              - type: External
-                external:
-                  metric:
-                    name: loki_query_scheduler_inflight_requests
-                  target:
-                    type: AverageValue
-                    # This value should be 75% of max_concurrent configuration option set in loki limits_config.
-                    # The default value for max_concurrent is 4, so this value should default be 3.
-                    averageValue: 3
-            behavior:
-              enabled: true
-              scaleDown:
-                stabilizationWindowSeconds: 1800
-            {{- end }}
-          extraEnv:
-            - name: GOMEMLIMIT
-              valueFrom:
-                resourceFieldRef:
-                  containerName: querier
-                  resource: requests.memory
           resources:
             {{- toYaml .Values.loki.querier.resources | nindent 12 }}
+          extraArgs:
+            - -config.expand-env=true
           affinity:
             podAntiAffinity:
-              requiredDuringSchedulingIgnoredDuringExecution: null
+              {{- /* This must be set to an empty slice to override the affinity set in the upstream chart */}}
+              requiredDuringSchedulingIgnoredDuringExecution: []
               preferredDuringSchedulingIgnoredDuringExecution:
                 - weight: 100
                   podAffinityTerm:
@@ -220,19 +240,25 @@ spec:
                     topologyKey: kubernetes.io/hostname
           maxUnavailable: 2
         queryFrontend:
-          replicas: 2
+          replicas: {{ .Values.loki.queryFrontend.replicas }}
+          maxUnavailable: 1
           resources:
             {{- toYaml .Values.loki.queryFrontend.resources | nindent 12 }}
-          maxUnavailable: 1
+          extraArgs:
+            - -config.expand-env=true
         queryScheduler:
-          replicas: 2
+          replicas: {{ .Values.loki.queryScheduler.replicas }}
           resources:
             {{- toYaml .Values.loki.queryScheduler.resources | nindent 12 }}
+          extraArgs:
+            - -config.expand-env=true
         indexGateway:
-          replicas: 2
+          replicas: {{ .Values.loki.indexGateway.replicas }}
+          maxUnavailable: 1
           resources:
             {{- toYaml .Values.loki.indexGateway.resources | nindent 12 }}
-          maxUnavailable: 1
+          extraArgs:
+            - -config.expand-env=true
           persistence:
             enabled: true
             size: 1Gi
@@ -243,15 +269,23 @@ spec:
           replicas: 1
           resources:
             {{- toYaml .Values.loki.compactor.resources | nindent 12 }}
+          extraArgs:
+            - -config.expand-env=true
           persistence:
             enabled: true
             claims:
               - name: data
+                accessModes:
+                  - ReadWriteOnce
                 size: 1Gi
                 {{- with .Values.storageClass }}
                 storageClass: {{ . }}
                 {{- end }}
         bloomGateway:
+          replicas: 0
+        bloomPlanner:
+          replicas: 0
+        bloomBuilder:
           replicas: 0
         bloomCompactor:
           replicas: 0
@@ -259,6 +293,8 @@ spec:
           replicas: 1
           resources:
             {{- toYaml .Values.loki.ruler.resources | nindent 12 }}
+          extraArgs:
+            - -config.expand-env=true
           persistence:
             enabled: true
             size: 1Gi
@@ -266,8 +302,10 @@ spec:
             storageClass: {{ . }}
             {{- end }}
         memcached:
+          {{- /* # ToDo: Override image repository, is "memcached", we should set it to "{{ .Values.registry }}/memcached" ?
           image:
-            repository: container-registry.example.com/dockerhub/memcached
+            repository: {{ .Values.registry }}/memcached
+          */}}
           podSecurityContext:
             seccompProfile:
               type: RuntimeDefault
@@ -286,8 +324,10 @@ spec:
             runAsGroup: 11211
             readOnlyRootFilesystem: true
         memcachedExporter:
+          {{- /* # ToDo: Override image repository, is "prom/memcached-exporter", we should set it to "{{ .Values.registry }}/prom/memcached-exporter" ?
           image:
-            repository: container-registry.example.com/dockerhub/prom/memcached-exporter
+            repository: {{ .Values.registry }}/prom/memcached-exporter
+          */}}
           resources:
             {{- toYaml .Values.loki.memcachedExporter.resources | nindent 12 }}
           containerSecurityContext:
@@ -304,30 +344,14 @@ spec:
             readOnlyRootFilesystem: true
         resultsCache:
           replicas: {{ .Values.loki.resultsCache.replicas }}
-          {{- $allocatedMemory := 64 }}
-          allocatedMemory: {{ $allocatedMemory }}
-          {{- $requestMemory := div ( add ( mul $allocatedMemory 12 ) 5 ) 10 }}
-          resources:
-            limits:
-              memory: {{ $requestMemory }}Mi
-            requests:
-              cpu: 50m
-              memory: {{ $requestMemory }}Mi
+          allocatedMemory: 64
         chunksCache:
           replicas: {{ .Values.loki.chunksCache.replicas }}
-          {{- $allocatedMemory := .Values.loki.cache.memoryMiB }}
-          allocatedMemory: {{ $allocatedMemory }}
-          {{- $requestMemory := div ( add ( mul $allocatedMemory 12 ) 5 ) 10 }}
-          resources:
-            limits:
-              memory: {{ $requestMemory }}Mi
-            requests:
-              cpu: 100m
-              memory: {{ $requestMemory }}Mi
+          allocatedMemory: 1024
         rollout_operator:
           enabled: true
           image:
-            repository: {{ .Values.registry }}/grafana/rollout-operator
+            registry: {{ .Values.registry }}
           podSecurityContext:
             fsGroup: 10001
             runAsGroup: 10001
@@ -341,6 +365,9 @@ spec:
             enabled: true
             labels:
               release: prometheus
+        sidecar:
+          image:
+            registry: {{ .Values.registry }}
         monitoring:
           serviceMonitor:
             enabled: true
@@ -390,13 +417,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.loki.name "-" . }}
   namespace: {{ $.Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: Deployment
     name: {{ print $.Values.loki.name "-" . }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.loki.autoscaling.vertical.updateMode | quote }}
 {{- end }}
 {{- range ( list "compactor" "index-gateway" "ingester-zone-a" "ingester-zone-b" "ingester-zone-c" "ruler" ) }}
 ---
@@ -405,13 +434,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.loki.name "-" . }}
   namespace: {{ $.Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: StatefulSet
     name: {{ print $.Values.loki.name "-" . }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.loki.autoscaling.vertical.updateMode | quote }}
 {{- end }}
 # we don't autoscale memcached memory, it will use what is available. We can however autoscale the memcached-exporter that is used to export metrics to prometheus
 {{- range ( list "chunks-cache" "results-cache" ) }}
@@ -421,13 +452,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.loki.name "-" . }}
   namespace: {{ $.Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: StatefulSet
     name: {{ print $.Values.loki.name "-" . }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.loki.autoscaling.vertical.updateMode | quote }}
   resourcePolicy:
     containerPolicies:
       - containerName: "memcached"
@@ -444,11 +477,37 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print .Values.loki.name "-canary" }}
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: DaemonSet
     name: {{ print .Values.loki.name "-canary" }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.loki.autoscaling.vertical.updateMode | quote }}
 {{- end }}
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: {{ print .Values.loki.name "-querier" }}
+  namespace: {{ .Values.loki.namespace }}
+spec:
+  maxReplicaCount: 30
+  minReplicaCount: 2
+  scaleTargetRef:
+    kind: Deployment
+    name: {{ print .Values.loki.name "-querier" }}
+  triggers:
+  - metadata:
+      metricName: querier_autoscaling_metric
+      query: sum(max_over_time(loki_query_scheduler_inflight_requests{namespace="{{ .Values.loki.namespace }}", quantile="0.75"}[2m]))
+      serverAddress: {{ .Values.prometheusAddress }}
+      threshold: "4"
+    type: prometheus
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 1800

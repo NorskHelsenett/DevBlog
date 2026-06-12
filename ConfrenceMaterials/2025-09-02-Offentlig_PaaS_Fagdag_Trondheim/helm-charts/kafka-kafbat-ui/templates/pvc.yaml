@@ -1,0 +1,16 @@
+{{- range .Values.persistentVolumeClaims }}
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ .name }}
+spec:
+  storageClassName: {{ .storageClassName }}
+  persistentVolumeReclaimPolicy:
+  # https://kubernetes.io/docs/concepts/storage/persistent-volumes/#access-modes
+  accessModes:
+    - {{ .accessMode }}
+  resources:
+    requests:
+      storage: {{ .storageSize }}
+---
+{{- end }}

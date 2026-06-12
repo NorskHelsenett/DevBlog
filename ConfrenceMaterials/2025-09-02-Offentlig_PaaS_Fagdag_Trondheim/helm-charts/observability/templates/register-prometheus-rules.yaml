@@ -1,0 +1,56 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mimirtools-load-prometheus-cluster-rules
+  namespace: obs-stack-tooling
+  annotations:
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+    spec:
+      restartPolicy: OnFailure
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups:
+          - 100
+      containers:
+      {{- range $i, $tenant := .Values.tenants }}
+      - name: mimirtool-{{ $tenant.team }}
+        image: "{{ $.Values.registry }}/grafana/mimirtool:3.0.0"
+        securityContext:
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+          privileged: false
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          readOnlyRootFilesystem: true
+        command:
+          - /bin/mimirtool
+        args:
+          - rules
+          - load
+          - /rules_to_import/prometheus_aggregated_cluster_metrics.yaml
+          - --address=http://{{ $.Values.mimirIngest.name }}-gateway.{{ $.Values.mimirIngest.namespace }}:80
+          - --id={{ $tenant.team }}
+        volumeMounts:
+          - name: prometheus-rules-volume
+            mountPath: /rules_to_import
+            readOnly: true
+      {{- end }}
+      volumes:
+        - name: prometheus-rules-volume
+          configMap:
+            name: prometheus-rules-configmap
+            items:
+              - key: prometheus_aggregated_cluster_metrics.yaml
+                path: prometheus_aggregated_cluster_metrics.yaml
+                mode: 0444

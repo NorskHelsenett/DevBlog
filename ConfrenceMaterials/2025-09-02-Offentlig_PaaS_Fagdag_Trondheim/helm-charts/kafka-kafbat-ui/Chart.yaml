@@ -1,0 +1,6 @@
+apiVersion: v2
+name: kafka-kafbat-ui
+description: A helm chart for deploying a kafbat ui instance to observe your strimzi kafka cluster
+type: application
+version: 0.0.1
+appVersion: "1.0.0"

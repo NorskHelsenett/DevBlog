@@ -1,0 +1,72 @@
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ .Values.postgresCluster.name }}
+  namespace: {{ .Values.postgresCluster.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  instances: {{ .Values.postgresCluster.instances }} # deafault 3, 1 primary + 2 replicas
+  postgresql:
+    version: "18" # Operator picks latest
+    # imageName: ghcr.io/cloudnative-pg/postgresql:18.3-minimal-trixie
+  storage:
+    size: {{ .Values.postgresCluster.storage.size }} # Per instance
+    # storageClass: standard
+    # enableVolumeSnapshots: true
+  bootstrap:
+    # The most common pattern is to start from an empty database
+    initdb:
+      database: appdb
+      owner: appuser
+      # locale: en_US.UTF-8
+      # encoding: UTF8
+      # postInitSQL:
+      #   - "CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+  {{- if .Values.postgresCluster.managed }}
+  managed:
+    {{- toYaml .Values.postgresCluster.managed | nindent 4 }}
+  {{- end }}
+#   secret:
+#     name: my-pg-secret
+#   superuserSecret:
+#     name: my-pg-secret
+  monitoring:
+    enablePodMonitor: true
+#   topologySpreadConstraints:
+#     - maxSkew: 1
+#       topologyKey: kubernetes.io/hostname
+#       whenUnsatisfiable: DoNotSchedule
+#       labelSelector:
+#         matchLabels:
+#           postgresql.cnpg.io/cluster: my-postgres
+  affinity:
+    # Enable pod anti-affinity to spread across nodes
+    enablePodAntiAffinity: true
+    # Topology key for anti-affinity (hostname = node level)
+    topologyKey: "kubernetes.io/hostname"
+    # Anti-affinity enforcement type (preferred or required)
+    podAntiAffinityType: "required"
+  {{- if .Values.backup.enabled }}
+  backup:
+    barmanObjectStore:
+      destinationPath: s3://pg-backups/{{ .Values.postgresCluster.name }}
+      endpointURL: {{ .Values.s3Endpoint }}
+      s3Credentials:
+        # Reference a secret that contains `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+        accessKeyId:
+          name: pg-s3-creds
+          key: accessKeyID
+        secretAccessKey:
+          name: pg-s3-creds
+          key: secretAccessKey
+      wal:
+        # How many days of WAL to retain
+        maxParallel: 6
+        compression: gzip
+        encryption: AES256
+  {{- end }}
+  {{- with .Values.postgresCluster.resources }}
+  resources:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}

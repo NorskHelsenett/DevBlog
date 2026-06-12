@@ -1,0 +1,10 @@
+argocdProject: "default"
+kafka:
+  namespace: kafka
+  strimzi:
+    # https://strimzi.io/docs/operators/latest/deploying#container-images-str
+    defaultImageRegistry: container-registry.example.com/quayio # default quay.io
+  cluster:
+    brokers:
+      storage:
+        size: 50Gi

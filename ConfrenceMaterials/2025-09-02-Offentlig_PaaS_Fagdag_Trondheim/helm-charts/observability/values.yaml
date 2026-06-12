@@ -1,5 +1,7 @@
 storageClass: example-storage-class-name
-registry: container-registry.example.com/dockerhub
+registry: container-registry-proxy.example.com/dockerhub
+registryGhcr: container-registry-proxy.example.com/ghcr # ghcr.io
+registryK8sio: container-registry-proxy.example.com/k8s # registry.k8s.io
 logLevel: warn
 logFormat: json
 revisionHistoryLimit: 1
@@ -10,6 +12,17 @@ environment: "" # test or prod
 #   - team: team-example
 #     opentelemetryCollector:
 #       memory: 512Mi
+#       replicas: 4
+#       overrideTopics:
+#         logs:
+#           - full-name-of-logs-previous
+#           - full-name-of-logs-new
+#         metrics:
+#           - full-name-of-metrics-previous
+#           - full-name-of-metrics-new
+#         traces:
+#           - full-name-of-traces-previous
+#           - full-name-of-traces-new
 tenants: []
 bucketPrefix: ""
 enableTracing: false
@@ -17,15 +30,17 @@ argocdProject: "default"
 consumerGroupId: "observability-stack"
 # Domain name of the opentelemetry collector that the components in this stack should send their telemetry to
 internalCollectorDomainName: "otlp-collector.opentelemetry"
-grafana:
+prometheusAddress: "http://prometheus-kube-prometheus-prometheus.prometheus-operator:9090"
+grafanaHa:
   # Used for giving additional roles access to organizations beyond the default set up where each team is given the Editor role for their own organization.
   # Could be used for giving a group the Viewer role in an organization.
   # additionalOrgMappings:
-  #   - "team-first-example:team-second-example:Editor"
+  #   - "team-example-oidc-role:team-example-grafana-organization:Editor"
   additionalOrgMappings: []
-  name: grafana
-  namespace: grafana
-  publish: false
+  name: grafana-web-ha
+  namespace: grafana-web-ha
+  publish: true
+  net: inet
   fqdn: ""
   ingressClassName: example-ingress-class-name
   ingress:
@@ -34,12 +49,12 @@ grafana:
     - volkovlabs-echarts-panel
     - grafana-lokiexplore-app
     - grafana-exploretraces-app
-  persistence:
-    readWriteMany: false
   resources: {}
   autoscaling:
+    # ToDo: Create support for horizontal scaling config
     vertical:
       enabled: false
+      updateMode: "Auto"
 loki:
   name: loki
   namespace: loki
@@ -51,10 +66,12 @@ loki:
   compactor:
     resources: {}
   distributor:
+    replicas: 3
     resources: {}
   gateway:
     resources: {}
   indexGateway:
+    replicas: 2
     resources: {}
   ingester:
     replicas: 9
@@ -64,79 +81,114 @@ loki:
   querier:
     resources: {}
   queryFrontend:
+    replicas: 2
     resources: {}
   queryScheduler:
+    replicas: 2
     resources: {}
   resultsCache:
     replicas: 9
   ruler:
     resources: {}
   useGateway: true
-  cache:
-    memoryMiB: 512
   autoscaling:
     vertical:
       enabled: false
-mimir:
+      updateMode: "Auto"
+mimirIngest:
   name: mimir
-  namespace: mimir
+  namespace: mimir-ingest
   retention: 336h
-  useGateway: true
   alertmanager:
+    replicas: 2
     resources: {}
   chunksCache:
+    allocatedMemoryMiB: 1024
     replicas: 9
   compactor:
     persistentVolume:
       size: 30Gi
+    replicas: 3
     resources: {}
   distributor:
+    replicas: 9
     resources: {}
   gateway:
+    autoscaling:
+      horizontal:
+        enabled: false
+        maxReplicas: 9
+        minReplicas: 2
+      vertical:
+        enabled: false
+        updateMode: "Auto"
     resources: {}
   indexCache:
+    allocatedMemoryMiB: 128
     replicas: 9
   ingester:
     persistentVolume:
-      size: 25Gi
+      size: 40Gi
     replicas: 9
     resources: {}
+  ingestStorage:
+    kafka:
+      address: "_tcp-clients._tcp.lgtm-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local"
+      autoCreateTopic: true
+      autoCreateTopicDefaultPartitions: 48 # must be >= number of ingester replicas. Use 48 instead of example 1000 because Axual has a max limit of 48
+      clientId: "" # Optionally overrides computed default
+      topic: "observability-stack-mimir-ingest"
+      consumerGroup: "observability-stack-mimir"
   memcachedExporter:
     resources: {}
   metadataCache:
+    allocatedMemoryMiB: 128
     replicas: 9
   overridesExporter:
     resources: {}
   querier:
-    replicas: 9
     resources: {}
   queryFrontend:
+    replicas: 2
     resources: {}
   queryScheduler:
+    replicas: 2
     resources: {}
   resultsCache:
+    allocatedMemoryMiB: 128
     replicas: 9
   ruler:
+    replicas: 1
     resources: {}
   storeGateway:
+    persistentVolume:
+      size: 2Gi
     replicas: 9
     resources: {}
   autoscaling:
     vertical:
       enabled: false
+      updateMode: "Auto"
 tempo:
   name: tempo
   namespace: tempo
   retention: 336h
-  useGateway: false
+  useGateway: true
   compactor:
     replicas: 9
     resources: {}
   distributor:
+    replicas: 3
     resources: {}
+  gateway:
+    autoscaling:
+      horizontal:
+        enabled: true
   ingester:
     replicas: 9
     resources: {}
+  memcached:
+    replicas: 9
   memcachedExporter:
     resources: {}
   metricsGenerator:
@@ -145,12 +197,14 @@ tempo:
     replicas: 9
     resources: {}
   queryFrontend:
+    replicas: 2
     resources: {}
     metrics:
       queryBackendAfter: 30m
   autoscaling:
     vertical:
       enabled: false
+      updateMode: "Auto"
 opentelemetryCollector:
   name: collector
   namespace: opentelemetry
@@ -158,16 +212,50 @@ opentelemetryCollector:
   autoscaling:
     vertical:
       enabled: false
-prometheusAdapter:
-  enabled: true
-  name: prometheus-adapter
-  namespace: prometheus-adapter
-  resources: {}
-  autoscaling:
-    vertical:
-      enabled: false
+      updateMode: "Auto"
 grafanaProvisioner:
   enabled: true
   name: grafana-provisioner
   namespace: grafana-provisioner
   environment: Development
+kafka:
+  namespace: kafka
+  strimzi:
+    # https://strimzi.io/docs/operators/latest/deploying#container-images-str
+    defaultImageRegistry: container-registry-proxy.example.com/quayio # default quay.io
+  cluster:
+    brokers:
+      storage:
+        size: 100Gi
+cloudNativePg:
+  version: "cloudnative-pg-v0.28.3"
+postgresCluster:
+  namespace: 'postgres-cluster-ns'
+  name: "pg-cluster"
+  instances: 2
+  managed:
+    roles:
+      - comment: The grafanaest of users
+        connectionLimit: -1
+        ensure: present
+        inRoles: []
+        inherit: true
+        login: true
+        name: grafana
+        passwordSecret:
+          name: db-secret-grafana
+        superuser: false
+  monitoring:
+    podMonitor:
+      enabled: true
+      prometheusRelease: "prometheus"
+  resources:
+    requests:
+      cpu: "1"
+      memory: "1Gi"
+    limits:
+      memory: "2Gi"
+  storage:
+    size: "10Gi"
+  backup:
+    enabled: false

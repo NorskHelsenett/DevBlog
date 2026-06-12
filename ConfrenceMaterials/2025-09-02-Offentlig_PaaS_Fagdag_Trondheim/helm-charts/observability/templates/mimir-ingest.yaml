@@ -1,0 +1,443 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  name: {{ .Values.mimirIngest.name }}-ingest
+  namespace: argocd
+spec:
+  destination:
+    namespace: {{ .Values.mimirIngest.namespace }}
+    server: https://kubernetes.default.svc
+  project: {{ .Values.argocdProject }}
+  source:
+    repoURL: https://grafana.github.io/helm-charts
+    chart: mimir-distributed
+    targetRevision: 6.0.6
+    helm:
+      valuesObject:
+        alertmanager:
+          {{- with .Values.storageClass }}
+          persistentVolume:
+            storageClass: {{ . }}
+          {{- end }}
+          replicas: {{ .Values.mimirIngest.alertmanager.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.alertmanager.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        chunks-cache:
+          allocatedMemory: {{ .Values.mimirIngest.chunksCache.allocatedMemoryMiB }}
+          enabled: true
+          replicas: {{ .Values.mimirIngest.chunksCache.replicas }}
+        compactor:
+          persistentVolume:
+            size: {{ .Values.mimirIngest.compactor.persistentVolume.size }}
+          {{- with .Values.storageClass }}
+            storageClass: {{ . }}
+          {{- end }}
+          replicas: {{ .Values.mimirIngest.compactor.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.compactor.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        distributor:
+          env:
+            {{- /*
+            We set this to decrease cpu usage and stop the alert MimirDistributorGcUsesTooMuchCpu from firing,
+            as per this issue https://github.com/grafana/mimir/issues/12502. This will increase the memory usage of the distributor.
+            */}}
+            - name: GOGC
+              value: "200"
+          replicas: {{ .Values.mimirIngest.distributor.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.distributor.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        fullnameOverride: {{ .Values.mimirIngest.name }}
+        gateway:
+          {{- with .Values.mimirIngest.gateway.autoscaling.horizontal }}
+          autoscaling:
+            enabled: {{ .enabled }}
+            maxReplicas: {{ .maxReplicas }}
+            minReplicas: {{ .minReplicas }}
+          {{- end }}
+          containerSecurityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            seccompProfile:
+              type: RuntimeDefault
+          nginx:
+            image:
+              registry: {{ .Values.registry }}
+              repository: nginxinc/nginx-unprivileged
+          podSecurityContext:
+            fsGroup: 101
+            runAsGroup: 101
+            runAsNonRoot: true
+            runAsUser: 101
+            supplementalGroups:
+              - 100
+          resources:
+            {{- toYaml .Values.mimirIngest.gateway.resources | nindent 12 }}
+        global:
+          extraEnv:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            {{- if .Values.enableTracing }}
+            - name: JAEGER_AGENT_HOST
+              value: "{{ .Values.internalCollectorDomainName }}"
+            - name: JAEGER_SAMPLER_PARAM
+              value: "1"
+            - name: JAEGER_SAMPLER_TYPE
+              value: "const"
+            {{- end }}
+          extraEnvFrom:
+            - secretRef:
+                name: {{ .Values.mimirIngest.name }}
+        image:
+          repository: {{ .Values.registry }}/grafana/mimir
+        index-cache:
+          allocatedMemory: {{ .Values.mimirIngest.indexCache.allocatedMemoryMiB }}
+          enabled: true
+          replicas: {{ .Values.mimirIngest.indexCache.replicas }}
+        ingester:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: app.kubernetes.io/component
+                        operator: In
+                        values:
+                          - ingester
+                      - key: app.kubernetes.io/instance
+                        operator: In
+                        values:
+                          - mimir-ingest
+                  topologyKey: "kubernetes.io/hostname"
+          persistentVolume:
+            size: {{ .Values.mimirIngest.ingester.persistentVolume.size }}
+          {{- with .Values.storageClass }}
+            storageClass: {{ . }}
+          {{- end }}
+          replicas: {{ .Values.mimirIngest.ingester.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.ingester.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+          topologySpreadConstraints: {}
+          zoneAwareReplication:
+            topologyKey: 'kubernetes.io/hostname'
+        {{- /* The mimir helm chart deploys a kafka instance by default. They do not recommend using it in production, so we disable it */}}
+        kafka:
+          enabled: false
+        # -- KEDA Autoscaling configuration
+        kedaAutoscaling:
+          prometheusAddress: {{ .Values.prometheusAddress }}
+          # customHeaders: {}
+          # pollingInterval: 10
+          # ignoreNullValues: true
+          unsafeSsl: true
+        memcached:
+          containerSecurityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            readOnlyRootFilesystem: true
+            runAsGroup: 11211
+            runAsNonRoot: true
+            runAsUser: 11211
+            seccompProfile:
+              type: RuntimeDefault
+          image:
+            repository: {{ .Values.registry }}/memcached
+          podSecurityContext:
+            seccompProfile:
+              type: RuntimeDefault
+            supplementalGroups:
+              - 100
+        memcachedExporter:
+          containerSecurityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            privileged: false
+            seccompProfile:
+              type: RuntimeDefault
+            readOnlyRootFilesystem: true
+            runAsGroup: 101
+            runAsNonRoot: true
+            runAsUser: 101
+          image:
+            repository: {{ .Values.registry }}/prom/memcached-exporter
+          resources:
+            {{- toYaml .Values.mimirIngest.memcachedExporter.resources | nindent 12 }}
+        metadata-cache:
+          allocatedMemory: {{ .Values.mimirIngest.metadataCache.allocatedMemoryMiB }}
+          enabled: true
+          replicas: {{ .Values.mimirIngest.metadataCache.replicas }}
+        mimir:
+          structuredConfig:
+            alertmanager_storage:
+              s3:
+                bucket_name: {{ .Values.bucketPrefix }}{{ .Values.mimirIngest.name }}-alertmanager
+            blocks_storage:
+              s3:
+                bucket_name: {{ .Values.bucketPrefix }}{{ .Values.mimirIngest.name }}-blocks
+              tsdb:
+                flush_blocks_on_shutdown: true
+            common:
+              storage:
+                backend: s3
+                s3:
+                  access_key_id: ${S3_USER}
+                  endpoint: {{ .Values.s3Endpoint }}
+                  http:
+                    insecure_skip_verify: true
+                  secret_access_key: ${S3_PASSWORD}
+            ingest_storage:
+              kafka:
+                address: {{ .Values.mimirIngest.ingestStorage.kafka.address | default "_tcp-clients._tcp.lgtm-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local" }}
+                auto_create_topic_enabled: {{ .Values.mimirIngest.ingestStorage.kafka.autoCreateTopic | default false }}
+                auto_create_topic_default_partitions: {{ .Values.mimirIngest.ingestStorage.kafka.autoCreateTopicDefaultPartitions | default 1000 }}
+                client_id: {{ .Values.mimirIngest.ingestStorage.kafka.clientId | default (printf "%s" .Values.mimirIngest.name) }}
+                consumer_group: {{ .Values.mimirIngest.ingestStorage.kafka.topic | default "observability-stack-mimir-ingest" }}
+                topic: {{ .Values.mimirIngest.ingestStorage.kafka.topic | default "observability-stack-mimir" }}
+            limits:
+              {{- /* Sets retention for metrics */}}
+              compactor_blocks_retention_period: {{ .Values.mimirIngest.retention }}
+              {{- /* Default is 200000 */}}
+              ingestion_burst_size: 10000000
+              {{- /* Default is 10000 */}}
+              ingestion_rate: 500000
+              {{- /* Default is 0. Must be > 0 to enable exemplars in Mimir */}}
+              max_global_exemplars_per_user: 10000000
+              {{- /* Default is 150000 */}}
+              max_global_series_per_user: 10000000
+              {{- /* Series can come out of order, so we need to set this to allow late samples */}}
+              out_of_order_time_window: 5m
+              {{- /* Default is 20 */}}
+              ruler_max_rules_per_rule_group: 50
+            memberlist:
+              cluster_label: {{ print .Values.mimirIngest.name "." .Values.mimirIngest.namespace | quote }}
+              bind_addr:
+                - ${MY_POD_IP}
+            query_scheduler:
+              {{- /* Default is 100 */}}
+              max_outstanding_requests_per_tenant: 1000
+            ruler:
+              query_frontend:
+                {{- /*
+                This config enables remote rule evaluation (https://grafana.com/docs/mimir/latest/references/architecture/components/ruler/#remote)
+                for the mimir ruler, to take advantage of the query-path optimizations in mimir.
+                */}}
+                address: {{ print "dns:///" .Values.mimirIngest.name "-query-frontend." .Values.mimirIngest.namespace ":9095" }}
+            ruler_storage:
+              s3:
+                bucket_name: {{ .Values.bucketPrefix }}{{ .Values.mimirIngest.name }}-ruler
+            server:
+              log_format: {{ .Values.logFormat }}
+              log_level: {{ .Values.logLevel }}
+            tenant_federation:
+              enabled: true
+            usage_stats:
+              enabled: false
+        minio:
+          enabled: false
+        overrides_exporter:
+          replicas: 1
+          resources:
+            {{- toYaml .Values.mimirIngest.overridesExporter.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        querier:
+          kedaAutoscaling:
+            enabled: true
+            minReplicaCount: 2
+            maxReplicaCount: 30
+          {{- /* This needs to be set to null to allow the HPA to manage the replicas, otherwise argocd will keep resetting it to 2 */}}
+          replicas: {}
+          resources:
+            {{- toYaml .Values.mimirIngest.querier.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        query_frontend:
+          replicas: {{ .Values.mimirIngest.queryFrontend.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.queryFrontend.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        query_scheduler:
+          replicas: {{ .Values.mimirIngest.queryScheduler.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.queryScheduler.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        results-cache:
+          allocatedMemory: {{ .Values.mimirIngest.resultsCache.allocatedMemoryMiB }}
+          enabled: true
+          replicas: {{ .Values.mimirIngest.resultsCache.replicas }}
+        rollout_operator:
+          fullnameOverride: {{ .Values.mimirIngest.name }}-rollout-operator
+          image:
+            repository: {{ .Values.registry }}/grafana/rollout-operator
+          podSecurityContext:
+            fsGroup: 10001
+            runAsGroup: 10001
+            runAsNonRoot: true
+            runAsUser: 10001
+            seccompProfile:
+              type: RuntimeDefault
+            supplementalGroups:
+              - 100
+          serviceMonitor:
+            enabled: true
+            labels:
+              release: prometheus
+        ruler:
+          replicas: {{ .Values.mimirIngest.ruler.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.ruler.resources | nindent 12 }}
+          securityContext:
+            supplementalGroups:
+              - 100
+        store_gateway:
+          affinity:
+            podAntiAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchExpressions:
+                      - key: app.kubernetes.io/component
+                        operator: In
+                        values:
+                          - store-gateway
+                      - key: app.kubernetes.io/instance
+                        operator: In
+                        values:
+                          - mimir-ingest
+                  topologyKey: "kubernetes.io/hostname"
+          env:
+            {{- /*
+            The mimir helm chart sets this equal to the value of the store gateway memory requests by default.
+            Since we use vertical autoscaling, and aim for a request a bit lower than needed, this will cause
+            excessive CPU usage. We therefore overwrite it with a larger value.
+            */}}
+            - name: GOMEMLIMIT
+              value: "32GiB"
+          persistentVolume:
+          {{- with .Values.storageClass }}
+            storageClass: {{ . }}
+          {{- end }}
+            size: {{ .Values.mimirIngest.storeGateway.persistentVolume.size }}
+          replicas: {{ .Values.mimirIngest.storeGateway.replicas }}
+          resources:
+            {{- toYaml .Values.mimirIngest.storeGateway.resources | nindent 12 }}
+          topologySpreadConstraints: {}
+          securityContext:
+            supplementalGroups:
+              - 100
+          zoneAwareReplication:
+            topologyKey: 'kubernetes.io/hostname'
+        metaMonitoring:
+          dashboards:
+            enabled: true
+          serviceMonitor:
+            enabled: true
+            labels:
+              release: prometheus
+          prometheusRule:
+            enabled: true
+            labels:
+              release: prometheus
+            mimirAlerts: true
+            mimirRules: true
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+{{- if .Values.mimirIngest.autoscaling.vertical.enabled }}
+{{- range ( list "distributor" "overrides-exporter" "querier" "query-frontend" "query-scheduler" "rollout-operator" "ruler" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.mimirIngest.name "-" . }}
+  namespace: {{ $.Values.mimirIngest.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ print $.Values.mimirIngest.name "-" . }}
+  updatePolicy:
+    updateMode: {{ $.Values.mimirIngest.autoscaling.vertical.updateMode | quote }}
+{{- end }}
+{{- range ( list "alertmanager" "compactor" "ingester-zone-a" "ingester-zone-b" "ingester-zone-c" "store-gateway-zone-a" "store-gateway-zone-b" "store-gateway-zone-c" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.mimirIngest.name "-" . }}
+  namespace: {{ $.Values.mimirIngest.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: StatefulSet
+    name: {{ print $.Values.mimirIngest.name "-" . }}
+  updatePolicy:
+    updateMode: {{ $.Values.mimirIngest.autoscaling.vertical.updateMode | quote }}
+{{- end }}
+{{- /* We don't autoscale memcached memory, it will use what is available. We can however autoscale the memcached-exporter that is used to export metrics to prometheus  */}}
+{{- range ( list "chunks-cache" "index-cache" "metadata-cache" "results-cache" ) }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ print $.Values.mimirIngest.name "-" . }}
+  namespace: {{ $.Values.mimirIngest.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: StatefulSet
+    name: {{ print $.Values.mimirIngest.name "-" . }}
+  updatePolicy:
+    updateMode: {{ $.Values.mimirIngest.autoscaling.vertical.updateMode | quote }}
+  resourcePolicy:
+    containerPolicies:
+      - containerName: "memcached"
+        controlledResources:
+          - "cpu"
+      - containerName: "exporter"
+        controlledResources:
+          - "cpu"
+          - "memory"
+{{- end }}
+{{- end }}

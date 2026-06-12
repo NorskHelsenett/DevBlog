@@ -1,0 +1,46 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: keda
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: keda
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    repoURL: https://kedacore.github.io/charts
+    # https://github.com/kedacore/charts/releases
+    targetRevision: 2.19.0
+    chart: keda
+    helm:
+      valuesObject:
+        # https://github.com/kedacore/charts/blob/main/keda/values.yaml
+        global:
+          image:
+            # -- Global image registry of KEDA components
+            registry: container-registry.example.com/ghcr
+        podSecurityContext:
+          # Appease kyverno with overtness
+          operator:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          metricServer:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+          webhooks:
+            runAsUser: 1000
+            runAsGroup: 1000
+            fsGroup: 1000
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true

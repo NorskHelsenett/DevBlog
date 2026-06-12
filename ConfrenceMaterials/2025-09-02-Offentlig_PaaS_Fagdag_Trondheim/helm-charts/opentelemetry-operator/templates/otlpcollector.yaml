@@ -4,6 +4,18 @@ kind: OpenTelemetryCollector
 metadata:
   name: otlp
 spec:
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - podAffinityTerm:
+            topologyKey: kubernetes.io/hostname
+            labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - otlp-collector
+          weight: 100
   config:
     receivers:
       otlp:
@@ -22,15 +34,12 @@ spec:
             action: insert
           {{- end }}
       {{- end }}
-      batch:
-        send_batch_size: 1024
-        send_batch_max_size: 1024
       memory_limiter:
         check_interval: 5s
         limit_percentage: 80
         spike_limit_percentage: 25
     exporters:
-      kafka/logs:
+      kafka:
         auth:
           tls:
             ca_file: /kafka/tls/BrokerCaCertificate.pem
@@ -38,8 +47,10 @@ spec:
             key_file: /kafka/tls/UserKey.pem
         brokers:
           - {{ .Values.kafka.bootstrapServer | quote }}
-        protocol_version: 2.1.0
-        topic: {{ .Values.kafka.topics.logs | quote }}
+        logs:
+          topic: {{ .Values.kafka.topics.logs | quote }}
+        metrics:
+          topic: {{ .Values.kafka.topics.metrics | quote }}
         producer:
           {{- with .Values.kafka.compression }}
           compression: {{ .type }}
@@ -47,40 +58,17 @@ spec:
             level: {{ .params.level }}
           {{- end }}
           required_acks: 0
-      kafka/metrics:
-        auth:
-          tls:
-            ca_file: /kafka/tls/BrokerCaCertificate.pem
-            cert_file: /kafka/tls/UserCertificate.pem
-            key_file: /kafka/tls/UserKey.pem
-        brokers:
-          - {{ .Values.kafka.bootstrapServer | quote }}
         protocol_version: 2.1.0
-        topic: {{ .Values.kafka.topics.metrics | quote }}
-        producer:
-          {{- with .Values.kafka.compression }}
-          compression: {{ .type }}
-          compression_params:
-            level: {{ .params.level }}
-          {{- end }}
-          required_acks: 0
-      kafka/traces:
-        auth:
-          tls:
-            ca_file: /kafka/tls/BrokerCaCertificate.pem
-            cert_file: /kafka/tls/UserCertificate.pem
-            key_file: /kafka/tls/UserKey.pem
-        brokers:
-          - {{ .Values.kafka.bootstrapServer | quote }}
-        protocol_version: 2.1.0
-        topic: {{ .Values.kafka.topics.traces | quote }}
-        producer:
-          {{- with .Values.kafka.compression }}
-          compression: {{ .type }}
-          compression_params:
-            level: {{ .params.level }}
-          {{- end }}
-          required_acks: 0
+        sending_queue:
+          batch:
+            {{- /*
+            This sets the max size of the batches exported to kafka. We set it to 800 KiB.
+            Setting this to 1MiB causes the messages to be too large for some reason.
+            */}}
+            max_size: 819200
+            sizer: bytes
+        traces:
+          topic: {{ .Values.kafka.topics.traces | quote }}
       {{- if .Values.otlpCollector.exporters.prometheusOtlp.enabled }}
       otlphttp/prometheus:
         endpoint: {{ .Values.otlpCollector.exporters.prometheusOtlp.endpoint }}
@@ -100,9 +88,8 @@ spec:
             {{- if .Values.otlpCollector.additionalLabels }}
             - attributes
             {{- end }}
-            - batch
           exporters:
-            - kafka/logs
+            - kafka
         metrics:
           receivers:
             - otlp
@@ -111,9 +98,8 @@ spec:
             {{- if .Values.otlpCollector.additionalLabels }}
             - attributes
             {{- end }}
-            - batch
           exporters:
-            - kafka/metrics
+            - kafka
             {{- if .Values.otlpCollector.exporters.prometheusOtlp.enabled }}
             - otlphttp/prometheus
             {{- end }}
@@ -125,9 +111,8 @@ spec:
             {{- if .Values.otlpCollector.additionalLabels }}
             - attributes
             {{- end }}
-            - batch
           exporters:
-            - kafka/traces
+            - kafka
       telemetry:
         logs:
           encoding: json
@@ -150,6 +135,8 @@ spec:
   observability:
     metrics:
       enableMetrics: true
+      extraLabels:
+        release: prometheus
   podDisruptionBudget:
     maxUnavailable: 1
   podSecurityContext:
@@ -157,6 +144,7 @@ spec:
       type: RuntimeDefault
     supplementalGroups:
       - 100
+  replicas: {{ .Values.otlpCollector.replicas }}
   resources:
     {{- toYaml .Values.otlpCollector.resources | nindent 4 }}
   securityContext:

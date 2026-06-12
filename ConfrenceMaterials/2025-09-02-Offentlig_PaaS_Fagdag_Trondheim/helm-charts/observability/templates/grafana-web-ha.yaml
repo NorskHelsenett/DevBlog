@@ -1,0 +1,182 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: {{ .Values.grafanaHa.name }}
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  source:
+    repoURL: https://grafana-community.github.io/helm-charts
+    targetRevision: 12.3.0
+    chart: grafana
+    {{- /* This doesn't work yet with ArgoCd and Harbor (or mostly anything except dockerhub
+    repoURL: oci://{{ .Values.registryGhcr }}/grafana-community/helm-charts/grafana
+    targetRevision: 12.3.0
+    # This path is not used but must be set when using an oci-repo
+    path: "."
+    */}}
+    helm:
+      valuesObject:
+        global:
+          imageRegistry: {{ .Values.registry }}
+        revisionHistoryLimit: {{ .Values.revisionHistoryLimit }}
+        securityContext:
+          seccompProfile:
+            type: RuntimeDefault
+          supplementalGroups:
+            - 100
+        containerSecurityContext:
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+        autoscaling:
+          enabled: true
+          minReplicas: 2 # Always 1 available should the cluster do a weird
+          maxReplicas: 9 # We only have 9 nodes in test
+          targetCPU: "80" # Percent used
+          targetMemory: "80" # Percent used
+        {{- if .Values.grafanaHa.publish }}
+        service:
+          type: NodePort
+        {{- end }}
+        serviceMonitor:
+          enabled: true
+          labels:
+            release: prometheus
+        {{- if .Values.grafanaHa.publish }}
+        ingress:
+          enabled: true
+          annotations:
+            cert-manager.io/cluster-issuer: internalacme
+          {{- with .Values.grafanaHa.ingress.extraAnnotations }}
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          pathType: ImplementationSpecific
+          ingressClassName: {{ .Values.grafanaHa.ingressClassName }}
+          hosts:
+            - {{ .Values.grafanaHa.fqdn }}
+          tls:
+            - hosts:
+              - {{ .Values.grafanaHa.fqdn }}
+              secretName: {{ .Values.grafanaHa.name }}-tls
+        {{- end }}
+        resources:
+          {{- toYaml .Values.grafanaHa.resources | nindent 10 }}
+        persistence:
+          {{- /* Grafana HA Migration: This is not needed any more */}}
+          enabled: false
+        initChownData:
+          enabled: false
+        admin:
+          existingSecret: {{ .Values.grafanaHa.name }}-admin
+        {{- if .Values.grafanaHa.publish }}
+        envFromSecret: grafana-oauth2
+        {{- end }}
+        {{- with .Values.grafanaHa.plugins }}
+        plugins: {{- toYaml . | nindent 10 }}
+        {{- end }}
+        # Secrets and things not going in the ini file prettily
+        envValueFrom:
+          GF_DATABASE_USER:
+            secretKeyRef:
+              name: db-secret-grafana
+              key: username
+          GF_DATABASE_PASSWORD:
+            secretKeyRef:
+              name: db-secret-grafana
+              key: password
+        grafana.ini:
+          {{- with .Values.grafanaHa.fqdn }}
+          server:
+            root_url: https://{{ . }}
+          {{- end }}
+          database:
+            {{- /* https://grafana.com/docs/grafana/latest/setup-grafana/configure-grafana/#database */}}
+            type: postgres # mysql, postgres or sqlite3
+            host: pg-cluster-rw.postgres-cluster-ns:5432
+            name: grafana # The database name
+          {{- if .Values.grafanaHa.publish }}
+          auth:
+            disable_login_form: true
+          auth.generic_oauth:
+            enabled: true
+            name: "Microsoft Entra ID"
+            allow_sign_up: true
+            auto_login: true
+            scopes: openid email profile offline_access
+            auth_url: https://login.microsoftonline.com/e3dac4b3-9b0b-4f41-8623-9392d0d566dc/oauth2/v2.0/authorize
+            token_url: https://login.microsoftonline.com/e3dac4b3-9b0b-4f41-8623-9392d0d566dc/oauth2/v2.0/token
+            api_url: https://graph.microsoft.com/oidc/userinfo
+            {{- $orgMappingArray := list "admin-oidc-role:*:Admin" }}
+            {{- range .Values.tenants }}
+            {{- $orgMappingArray = append $orgMappingArray ( print .team ":" .team ":Editor" ) }}
+            {{- end }}
+            {{- range .Values.grafanaHa.additionalOrgMappings }}
+            {{- if ( not ( regexMatch "^([a-z]+-)*[a-z]+:(team-([a-z]+-)*[a-z]+|\\*):(Editor|Viewer)$" . ) ) }}
+            {{- fail "Invalid value for additional org mappings. Expected value is <dash-separated lowercase words>:<team-, then dash-separated lowercase-words>:<Viewer or Editor>. E.g. my-custom-role:team-awesome:Viewer ." }}
+            {{- end }}
+            {{- $orgMappingArray = append $orgMappingArray . }}
+            {{- end }}
+            {{- $orgMapping := join " " $orgMappingArray }}
+            role_attribute_path: contains(roles[*], 'team-awesome') && 'GrafanaAdmin' || 'None'
+            allow_assign_grafana_admin: true
+            org_attribute_path: roles
+            org_mapping: {{ $orgMapping }}
+            use_pkce: true
+            use_refresh_token: true
+            role_attribute_strict: true
+          users:
+            auto_assign_org_role: None
+          unified_alerting:
+            ha_single_node_evaluation: true
+          {{- end }}
+          log:
+            mode: console
+            level: {{ .Values.logLevel }}
+          log.console:
+            format: {{ .Values.logFormat }}
+          analytics:
+            enabled: false
+            reporting_enabled: false
+            check_for_updates: false
+            check_for_plugin_updates: false
+          {{- if .Values.enableTracing }}
+          tracing.opentelemetry.otlp:
+            address: {{ .Values.internalCollectorDomainName }}:4317
+          {{- end }}
+          security:
+            allow_embedding: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: {{ .Values.grafanaHa.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+{{- if .Values.grafanaHa.autoscaling.vertical.enabled }}
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ .Values.grafanaHa.name }}
+  namespace: {{ .Values.grafanaHa.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "5"
+spec:
+  targetRef:
+    apiVersion: "apps/v1"
+    kind: Deployment
+    name: {{ .Values.grafanaHa.name }}
+  updatePolicy:
+    updateMode: {{ .Values.grafanaHa.autoscaling.vertical.updateMode | quote }}
+{{- end }}

@@ -1,0 +1,114 @@
+# Default values for kafka-kafbat-ui.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# This will set the replicaset count more information can be found here: https://kubernetes.io/docs/concepts/workloads/controllers/replicaset/
+replicaCount: 0
+# How many old revisions to keep around. Mostly useless for our setups since we do everything through git referenced chart commit updates. Default is 10.
+revisionHistoryLimit: 0
+
+# This sets the container image more information can be found here: https://kubernetes.io/docs/concepts/containers/images/
+image:
+  repository: "container-registry-proxy.example.com/ghcr/kafbat/kafka-ui"
+  # This sets the pull policy for images.
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion.
+  tag: "v1.5.0"
+
+configMap:
+  HELM_VAR_KAFKA_CLUSTERS_0_NAME: "lgtm-kafka-cluster-env-produc-cluster-0"
+  HELM_VAR_KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "_tcp-clients._tcp.lgtm-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local"
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED: "true"
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED: "true"
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_TOPIC: "__kui-audit-log"
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_MS: "-1" # Time-wise, retain logs forever
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_BYTES: "1048576" # Only keep 1MiB of logs locally
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICSPARTITIONS: "1"
+  HELM_VAR_KAFKA_CLUSTERS_0_AUDIT_LEVEL: "all"
+  HELM_VAR_LOGGING_LEVEL_ROOT: "info" # trace, debug, info, warn, error
+  HELM_VAR_LOGGING_LEVEL_IO_KAFBAT_UI: "info" # trace, debug, info, warn, error
+
+# Config for reloader. Remember that you have to install it in the cluster it you want it to do anything
+reloader:
+  auto: "true"
+
+# This is for the secrets for pulling an image from a private repository more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/pull-image-private-registry/
+imagePullSecrets: []
+# This is to override the chart name.
+nameOverride: ""
+fullnameOverride: ""
+
+# This section builds out the service account more information can be found here: https://kubernetes.io/docs/concepts/security/service-accounts/
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials?
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# This is for setting Kubernetes Annotations to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/
+podAnnotations: {}
+# This is for setting Kubernetes Labels to a Pod.
+# For more information checkout: https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/
+podLabels: {}
+
+podSecurityContext:
+  fsGroup: 1000
+  supplementalGroups: [501]
+
+securityContext:
+  capabilities:
+    drop:
+    - ALL
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+
+# This is for setting up a service more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/
+service:
+  # This sets the service type more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#publishing-services-service-types
+  type: NodePort
+  # This sets the ports more information can be found here: https://kubernetes.io/docs/concepts/services-networking/service/#field-spec-ports
+  port: 8080
+
+resources: {}
+
+livenessProbe:
+  httpGet:
+    path: /
+    port: pod-port-http
+readinessProbe:
+  httpGet:
+    path: /
+    port: pod-port-http
+  initialDelaySeconds: 5
+
+# This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 100
+  targetCPUUtilizationPercentage: 80
+  # targetMemoryUtilizationPercentage: 80
+
+persistentVolumeClaims: []
+volumes: []
+volumeMounts: []
+
+secretsPutInEnv: []
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

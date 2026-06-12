@@ -1,0 +1,37 @@
+{{- /* https://github.com/pgadmin-org/pgadmin4/tree/master/pkg/helm */}}
+{{- /* Port forward command for copy/pasting: `kubectl --namespace postgres-cluster-ns port-forward svc/pgadmin4 8080:80` */}}
+{{- /* After deploy you have to edit the app and set the copy thing to this: `ls /venv/bin/python3.* | sort -V -r | head -n 1 | xargs -i cp {}` at approx line 149 */}}
+{{- /* Above can be removed once this issue is resolved: https://github.com/pgadmin-org/pgadmin4/issues/9572 */}}
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: pgadmin
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  destination:
+    namespace: {{ .Values.postgresCluster.namespace }}
+    server: https://kubernetes.default.svc
+  project: default
+  source:
+    {{- /* Note that OCI connections for charts at the moment only seem to work with docker.io */}}
+    repoURL: oci://docker.io/dpage/pgadmin4-helm
+    targetRevision: 9.15.0
+    {{- /* This path is not used but must be set when using an oci-repo */}}
+    path: "."
+    helm:
+      valuesObject:
+        # Set to 1 in ArgoCd while you troubleshoot
+        # (you have to kubectl port forward anyway, and this reduces the attack surface while it's unused.)
+        replicas: 0
+        image:
+          registry: "{{ .Values.registry }}"
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: true

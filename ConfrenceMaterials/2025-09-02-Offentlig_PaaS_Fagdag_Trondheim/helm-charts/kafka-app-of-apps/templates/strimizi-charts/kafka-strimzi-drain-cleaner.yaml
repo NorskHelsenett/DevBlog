@@ -1,0 +1,40 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kafka-strimzi-drain-cleaner
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: {{ .Values.argocdProject }}
+  destination:
+    name: "in-cluster"
+    namespace: {{ .Values.kafka.namespace }}
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: true
+    syncOptions:
+      - CreateNamespace=true
+  source:
+    chart: strimzi-drain-cleaner
+    repoURL: container-registry.example.com/quayio/strimzi-helm
+    targetRevision: 1.4.0
+    helm:
+      valuesObject:
+        image.registry: {{ .Values.kafka.strimzi.defaultImageRegistry }}
+        namespace.create: false
+        securityContext:
+          capabilities:
+            drop:
+              - ALL
+          seccompProfile:
+            type: RuntimeDefault
+          privileged: false
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          readOnlyRootFilesystem: true

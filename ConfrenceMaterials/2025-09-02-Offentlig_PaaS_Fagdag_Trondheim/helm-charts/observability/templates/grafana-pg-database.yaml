@@ -1,0 +1,16 @@
+{{- /* https://cloudnative-pg.io/docs/1.28/declarative_database_management/ */}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Database
+metadata:
+  name: grafana-db
+  namespace: postgres-cluster-ns
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  name: grafana
+  owner: grafana
+  cluster:
+    name: pg-cluster
+#   extensions:
+#     - name: bloom
+#       ensure: present

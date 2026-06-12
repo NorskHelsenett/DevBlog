@@ -11,21 +11,17 @@ metadata:
 spec:
   project: {{ .Values.argocdProject }}
   source:
-    repoURL: container-registry.example.com/plattform-helm
-    targetRevision: 0.0.84
+    repoURL: container-registry-proxy.example.com/example-repo
+    targetRevision: 0.0.89
     chart: grafana-provisioner
     helm:
-      values: |
+      valuesObject:
         environment: {{ .Values.grafanaProvisioner.environment }}
-        grafanaUrl: {{ print ( .Values.grafana.name ) "." ( .Values.grafana.namespace ) ":80" }}
+        grafanaUrl: {{ print ( .Values.grafanaHa.name ) "." ( .Values.grafanaHa.namespace ) ":80" }}
         opentelemetryCollectorEndpoint: "http://otlp-collector.opentelemetry:4318"
         datasources:
           alertmanager:
-            {{- if .Values.mimir.useGateway }}
-            url: {{ print "http://" .Values.mimir.name "-gateway." .Values.mimir.namespace ":80" }}
-            {{- else }}
-            url: {{ print "http://" .Values.mimir.name "-alertmanager." .Values.mimir.namespace  ":8080" }}
-            {{- end }}
+            url: {{ print "http://" .Values.mimirIngest.name "-gateway." .Values.mimirIngest.namespace ":80" }}
           loki:
             {{- if .Values.loki.useGateway }}
             url: {{ print "http://" .Values.loki.name "-gateway." .Values.loki.namespace ":80" }}
@@ -33,24 +29,20 @@ spec:
             url: {{ print "http://" .Values.loki.name "-query-frontend." .Values.loki.namespace ":3100" }}
             {{- end }}
           prometheus:
-            {{- if .Values.mimir.useGateway }}
-            url: {{ print "http://" .Values.mimir.name "-gateway." .Values.mimir.namespace ":80/prometheus" }}
-            {{- else }}
-            url: {{ print "http://" .Values.mimir.name "-query-frontend." .Values.mimir.namespace ":8080/prometheus" }}
-            {{- end }}
+            url: {{ print "http://" .Values.mimirIngest.name "-gateway." .Values.mimirIngest.namespace ":80/prometheus" }}
           tempo:
             {{- if .Values.tempo.useGateway }}
             url: {{ print "http://" .Values.tempo.name "-gateway." .Values.tempo.namespace ":80" }}
             {{- else }}
             url: {{ print "http://" .Values.tempo.name "-query-frontend." .Values.tempo.namespace ":3200" }}
             {{- end }}
-            streamingEnabled: {{ not .Values.tempo.useGateway }}
+            streamingEnabled: true
         {{- if .Values.tenants }}
         organizations:
         {{- range .Values.tenants }}
         {{- $_ := required "Team is required in tenant" .team }}
         {{- if not ( regexMatch "^team-[a-z-]+$" .team ) }}
-        {{- fail "invalid value for team, must be prefixed with 'team-' and can only contain lowercase letters eg 'team-example'" }}
+        {{- fail "invalid value for team, must be prefixed with 'team-' and can only contain lowercase letters eg 'team-abc'" }}
         {{- end }}
           - name: {{ .team }}
         {{- end }}
@@ -64,4 +56,6 @@ spec:
       prune: true
     syncOptions:
       - CreateNamespace=true
+      {{- /* We need to apply server side because the dashboard resources that are stored in configmaps are too large */}}
+      - ServerSideApply=true
 {{- end }}

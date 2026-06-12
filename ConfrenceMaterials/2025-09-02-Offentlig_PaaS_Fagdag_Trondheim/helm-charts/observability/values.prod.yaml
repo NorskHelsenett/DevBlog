@@ -1,21 +1,15 @@
 s3Endpoint: "s3.example.com"
 environment: "prod"
 bucketPrefix: "otel-"
-grafana:
+grafanaHa:
   additionalOrgMappings:
-    - "team-example-first:team-example-second:Editor"
-    - "team-antother-example:team-much-example:Viewer"
-  publish: "true"
+    - "team-example-token-role:team-example-organization:Editor"
+    - "team-antother-example-oidc-role:team-best-organization:Viewer"
   fqdn: "grafana.example.com"
   resources:
     requests:
-      cpu: 10m
-      memory: 150Mi
-    limits:
+      cpu: 200m
       memory: 512Mi
-  autoscaling:
-    vertical:
-      enabled: false
 grafanaProvisioner:
   environment: Production
 loki:
@@ -23,247 +17,215 @@ loki:
   canary:
     resources:
       requests:
-        cpu: 5m
+        cpu: 1m
         memory: 32Mi
-      limits:
-        memory: 128Mi
+  chunksCache:
+    replicas: 12
   compactor:
     resources:
       requests:
-        cpu: 10m
-        memory: 100Mi
-      limits:
-        memory: 1024Mi
+        cpu: 5m
+        memory: 170Mi
   distributor:
     resources:
       requests:
         cpu: 15m
-        memory: 70Mi
-      limits:
-        memory: 512Mi
+        memory: 95Mi
   gateway:
     resources:
       requests:
         cpu: 10m
         memory: 32Mi
-      limits:
-        memory: 128Mi
   indexGateway:
     resources:
       requests:
         cpu: 3m
-        memory: 100Mi
-      limits:
-        memory: 512Mi
+        memory: 160Mi
   ingester:
+    replicas: 12
     resources:
       requests:
-        cpu: 25m
-        memory: 256Mi
-      limits:
-        memory: 1024Mi
+        cpu: 20m
+        memory: 360Mi
   memcachedExporter:
     resources:
+      limits:
+        memory: 1512Mi
       requests:
         cpu: 2m
-        memory: 70Mi
-      limits:
-        memory: 1024Mi
+        memory: 128Mi
   querier:
     resources:
       requests:
-        cpu: 25m
-        memory: 350Mi
-      limits:
-        memory: 4096Mi
+        cpu: 14m
+        memory: 128Mi
   queryFrontend:
     resources:
       requests:
-        cpu: 8m
-        memory: 300Mi
-      limits:
-        memory: 1024Mi
+        cpu: 5m
+        memory: 375Mi
   queryScheduler:
     resources:
       requests:
         cpu: 4m
         memory: 50Mi
-      limits:
-        memory: 256Mi
+  resultsCache:
+    replicas: 12
   ruler:
     resources:
       requests:
-        cpu: 10m
+        cpu: 7m
         memory: 100Mi
-      limits:
-        memory: 256Mi
   autoscaling:
     vertical:
-      enabled: false
-mimir:
+      enabled: true
+      updateMode: "Initial"
+mimirIngest:
   retention: 1y
   alertmanager:
     resources:
       requests:
-        cpu: 8m
+        cpu: 2m
         memory: 55Mi
-      limits:
-        memory: 512Mi
+  chunksCache:
+    replicas: 12
   compactor:
     persistentVolume:
-      size: 40Gi
+      size: 75Gi
     resources:
       requests:
-        cpu: 4m
-        memory: 70Mi
-      limits:
-        memory: 1024Mi
+        cpu: 9m
+        memory: 175Mi
   distributor:
+    replicas: 12
     resources:
       requests:
-        cpu: 1000m
-        memory: 800Mi
-      limits:
-        memory: 4096Mi
+        cpu: 227m
+        memory: 128Mi
   gateway:
     resources:
       requests:
         cpu: 10m
         memory: 32Mi
-      limits:
-        memory: 128Mi
+  indexCache:
+    replicas: 12
   ingester:
+    persistentVolume:
+      size: 40Gi
+    replicas: 15
     resources:
       requests:
-        cpu: 256m
-        memory: 10000Mi
-      limits:
-        memory: 20000Mi
+        cpu: 225m
+        memory: 8000Mi
   memcachedExporter:
     resources:
-      requests:
-        cpu: 2m
-        memory: 25Mi
       limits:
-        memory: 256Mi
+        memory: 1024Mi
+      requests:
+        cpu: 50m
+        memory: 128Mi
+  metadataCache:
+    replicas: 12
   overridesExporter:
     resources:
       requests:
         cpu: 2m
         memory: 34Mi
-      limits:
-        memory: 256Mi
   querier:
     resources:
       requests:
         cpu: 6m
-        memory: 87Mi
-      limits:
-        memory: 1024Mi
+        memory: 350Mi
   queryFrontend:
     resources:
       requests:
         cpu: 6m
-        memory: 95Mi
-      limits:
-        memory: 256Mi
+        memory: 160Mi
   queryScheduler:
     resources:
       requests:
         cpu: 3m
         memory: 38Mi
-      limits:
-        memory: 256Mi
+  resultsCache:
+    replicas: 12
   ruler:
     resources:
       requests:
-        cpu: 5m
-        memory: 67Mi
-      limits:
-        memory: 256Mi
+        cpu: 100m
+        memory: 200Mi
   storeGateway:
+    persistentVolume:
+      size: 5Gi
+    replicas: 12
     resources:
       requests:
-        cpu: 5m
-        memory: 71Mi
-      limits:
-        memory: 1024Mi
+        cpu: 12m
+        memory: 128Mi
   autoscaling:
     vertical:
-      enabled: false
+      enabled: true
+      updateMode: "Initial"
 opentelemetryCollector:
   resources:
     requests:
       cpu: 5m
-      memory: 47Mi
-    limits:
-      memory: 2048Mi
+      memory: 128Mi
   autoscaling:
     vertical:
-      enabled: false
-prometheusAdapter:
-  resources:
-    requests:
-      cpu: 5m
-      memory: 34Mi
-    limits:
-      memory: 256Mi
-  autoscaling:
-    vertical:
-      enabled: false
+      enabled: true
+      updateMode: "Initial"
 tempo:
   compactor:
-    resources:
-      requests:
-        cpu: 3m
-        memory: 512Mi
-      limits:
-        memory: 4096Mi
-  distributor:
-    resources:
-      requests:
-        cpu: 7m
-        memory: 129Mi
-      limits:
-        memory: 2560Mi
-  ingester:
+    replicas: 12
     resources:
       requests:
         cpu: 4m
-        memory: 633Mi
-      limits:
-        memory: 5120Mi
-  memcachedExporter:
+        memory: 1000Mi
+  distributor:
     resources:
       requests:
-        cpu: 2m
-        memory: 15Mi
+        cpu: 5m
+        memory: 240Mi
+  ingester:
+    replicas: 12
+    resources:
+      requests:
+        cpu: 6m
+        memory: 1700Mi
+  memcached:
+    replicas: 12
+  memcachedExporter:
+    resources:
       limits:
-        memory: 2048Mi
+        memory: 1024Mi
+      requests:
+        cpu: 2m
+        memory: 128Mi
   metricsGenerator:
     resources:
       requests:
-        cpu: 24m
-        memory: 1533Mi
-      limits:
-        memory: 4096Mi
+        cpu: 15m
+        memory: 1700Mi
   querier:
+    replicas: 12
     resources:
       requests:
         cpu: 3m
-        memory: 98Mi
-      limits:
-        memory: 2048Mi
+        memory: 150Mi
   queryFrontend:
     resources:
       requests:
         cpu: 1m
-        memory: 22Mi
-      limits:
-        memory: 1024Mi
+        memory: 64Mi
   autoscaling:
     vertical:
-      enabled: false
+      enabled: true
+      updateMode: "Initial"
+kafka:
+  cluster:
+    brokers:
+      storage:
+        size: 150Gi
 tenants:
   - team: "team-admins"
   - team: "team-example"

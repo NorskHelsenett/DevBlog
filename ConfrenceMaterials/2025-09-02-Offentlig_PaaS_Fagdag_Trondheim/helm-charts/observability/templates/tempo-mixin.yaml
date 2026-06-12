@@ -3,6 +3,8 @@ kind: PrometheusRule
 metadata:
   name: {{ .Values.tempo.name }}-rules
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     release: prometheus
 spec: {{- .Files.Get "rules/tempo/recording.yaml" | nindent 2 }}
@@ -12,6 +14,8 @@ kind: PrometheusRule
 metadata:
   name: {{ .Values.tempo.name }}-alerts
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     release: prometheus
 spec: {{- .Files.Get "rules/tempo/alerts.yaml" | nindent 2 }}
@@ -21,6 +25,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-block-builder-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -32,6 +38,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-operational-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -43,6 +51,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-reads-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -54,6 +64,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-resources-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -65,6 +77,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-rollout-progress-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -76,6 +90,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-tenants-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -87,6 +103,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.tempo.name }}-writes-dashboard
   namespace: {{ .Values.tempo.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:

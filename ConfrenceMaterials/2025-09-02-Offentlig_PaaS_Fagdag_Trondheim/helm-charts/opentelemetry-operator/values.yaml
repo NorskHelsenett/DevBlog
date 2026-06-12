@@ -5,9 +5,11 @@ autoscaling:
 clusterCollector:
   enabled: true
   additionalMetricLabels: {}
+  replicas: 2
   resources: {}
   scrapeInterval: 30s
   targetAllocator:
+    replicas: 2
     resources: {}
   telemetry:
     logs:
@@ -20,40 +22,26 @@ kafka:
     params:
       # compression level used, see https://github.com/open-telemetry/opentelemetry-collector-contrib/tree/main/exporter/kafkaexporter#configuration-settings
       level: 11
-  secretName: "kafka-example-secret-name"
-  # deprecated, use signal specific topics in kafka.topics
-  topic: ""
+  secretName: "kafka-otel-user-secret"
   topics:
     logs: ""
     metrics: ""
     traces: ""
 
 otlpCollector:
-  enabled: false
+  enabled: true
   # these are in the form key: value
   additionalLabels: {}
   exporters:
+    # this pushes the metrics received over otlp back to the local prometheus server running in the cluster
     prometheusOtlp:
-      enabled: false
-      endpoint: ""
+      enabled: true
+      endpoint: "http://prometheus-kube-prometheus-prometheus.prometheus-operator:9090/api/v1/otlp"
+  replicas: 2
   resources: {}
   telemetry:
     logs:
       level: warn
-
-# deprecated, use clusterCollector.additionalMetricLabels
-labels: {}
-
-# deprecated, use clusterCollector.resources
-collector:
-  resources: {}
-
-# deprecated, use clusterCollector.targetallocator.resources
-targetallocator:
-  resources: {}
-
-# deprecated, use clusterCollector.scrapeInterval
-scrapeInterval: 30s
 
 opentelemetry-operator:
   revisionHistoryLimit: 1
@@ -67,6 +55,8 @@ opentelemetry-operator:
       repository: container-registry.example.com/ghcr/open-telemetry/opentelemetry-operator/target-allocator
     featureGatesMap:
       operator.targetallocator.mtls: true
+    extraArgs:
+      - "--metrics-secure=false"
     resources: {}
     serviceMonitor:
       enabled: true
@@ -79,12 +69,22 @@ opentelemetry-operator:
       defaultRules:
         enabled: true
     createRbacPermissions: true
-  kubeRBACProxy:
-    image:
-      repository: container-registry.example.com/quayio/brancz/kube-rbac-proxy
-    resources: {}
   securityContext:
     seccompProfile:
       type: RuntimeDefault
     supplementalGroups:
       - 100
+  admissionWebhooks:
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: NotIn
+          values:
+            - "argocd"
+            - "default"
+            - "kube-node-lease"
+            - "kube-public"
+            - "kube-system"
+            - "monitoring"
+            - "prometheus-blackbox-exporter"
+            - "prometheus-operator"

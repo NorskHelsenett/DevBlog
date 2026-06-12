@@ -12,122 +12,138 @@ spec:
   project: {{ $.Values.argocdProject }}
   source:
     repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
-    targetRevision: 0.127.2
+    targetRevision: 0.156.2
     chart: opentelemetry-collector
     helm:
-      values: |
+      valuesObject:
         fullnameOverride: {{ print $.Values.opentelemetryCollector.name "-" .team }}
         mode: "deployment"
+        {{- with (.opentelemetryCollector).replicas }}
+        replicaCount: {{ . }}
+        {{- end }}
         config:
           receivers:
-            otlp: null
-            zipkin: null
-            jaeger: null
-            prometheus: null
+            otlp: {}
+            zipkin: {}
+            jaeger: {}
+            prometheus: {}
             {{- $bootstrapServer := "" }}
             {{- if ( eq $.Values.environment "prod" ) }}
-            {{- $bootstrapServer = ( print "bootstrap-" $.Values.location ".kafka.example.com:9094" ) }}
+            {{- $bootstrapServer = ( print "bootstrap.kafka.example.com:9094" ) }}
             {{- else }}
-            {{- $bootstrapServer = ( print "bootstrap-" $.Values.location "-" $.Values.environment ".kafka.example.com:9094" ) }}
+            {{- $bootstrapServer = ( print "bootstrap-" $.Values.environment ".kafka.example.com:9094" ) }}
             {{- end }}
-            kafka/logs:
-              group_id: {{ $.Values.consumerGroupId }}
-              protocol_version: 2.1.0
-              brokers:
-                - {{ $bootstrapServer }}
-              topic: {{ print "otel-" .team "-logs" }}
+            kafka:
               auth:
                 tls:
                   ca_file: /kafka/tls/BrokerCaCertificate.pem
                   cert_file: /kafka/tls/UserCertificate.pem
                   key_file: /kafka/tls/UserKey.pem
-              message_marking:
-                after: true
-                on_error: true
-              error_backoff:
-                enabled: true
-            kafka/metrics:
-              group_id: {{ $.Values.consumerGroupId }}
-              protocol_version: 2.1.0
               brokers:
                 - {{ $bootstrapServer }}
-              topic: {{ print "otel-" .team "-metrics" }}
-              auth:
-                tls:
-                  ca_file: /kafka/tls/BrokerCaCertificate.pem
-                  cert_file: /kafka/tls/UserCertificate.pem
-                  key_file: /kafka/tls/UserKey.pem
+              error_backoff:
+                enabled: true
+              group_id: {{ print "prefix-" $.Values.consumerGroupId }}
+              {{- /* this needs to be set explisitly when using collector version >= 0.137.0 because the franz-go kafka library implementation sets no default value */}}
+              group_rebalance_strategy: range
+              logs:
+                topics:
+                  {{- if not ((.opentelemetryCollector).overrideTopics).logs }}
+                  - {{ print "otel-" .team "-logs" }}
+                  {{- else }}
+                  {{- range $topicName := .opentelemetryCollector.overrideTopics.logs }}
+                  - {{$topicName}}
+                  {{- end }}{{- /* end range */}}
+                  {{- end }}{{- /* end ifelse */}}
               message_marking:
                 after: true
                 on_error: true
-              error_backoff:
-                enabled: true
-            kafka/traces:
-              group_id: {{ $.Values.consumerGroupId }}
+              metrics:
+                topics:
+                  {{- if not ((.opentelemetryCollector).overrideTopics).metrics }}
+                  - {{ print "otel-" .team "-metrics" }}
+                  {{- else }}
+                  {{- range $topicName := .opentelemetryCollector.overrideTopics.metrics }}
+                  - {{$topicName}}
+                  {{- end }}{{- /* end range */}}
+                  {{- end }}{{- /* end ifelse */}}
               protocol_version: 2.1.0
-              brokers:
-                - {{ $bootstrapServer }}
-              topic: {{ print "otel-" .team "-traces" }}
-              auth:
-                tls:
-                  ca_file: /kafka/tls/BrokerCaCertificate.pem
-                  cert_file: /kafka/tls/UserCertificate.pem
-                  key_file: /kafka/tls/UserKey.pem
-              message_marking:
-                after: true
-                on_error: true
-              error_backoff:
-                enabled: true
+              traces:
+                topics:
+                  {{- if not ((.opentelemetryCollector).overrideTopics).traces }}
+                  - {{ print "otel-" .team "-traces" }}
+                  {{- else }}
+                  {{- range $topicName := .opentelemetryCollector.overrideTopics.traces }}
+                  - {{$topicName}}
+                  {{- end }}{{- /* end range */}}
+                  {{- end }}{{- /* end ifelse */}}
           processors:
-            # The memory_limiter processor is enabled by default in the upstream helm chart.
-            # We do not need it in our case since we do not want to drop records from kafka if memory usage is close to limit,
-            # we should rather get OOMKilled and start reading the topic on restart.
-            memory_limiter: null
+            {{- /*
+            The batch processor is enabled by default in the upstream helm chart.
+            Newer versions of the collector recommend configuring batching in the exporter.sending_queue parameter,
+            so we remove the processor config from the chart by sending an empty map.
+            */}}
+            batch: {}
+            {{- /*
+            The memory_limiter processor is enabled by default in the upstream helm chart.
+            We do not need it in our case since we do not want to drop records from kafka if memory usage is close to limit,
+            we should rather get OOMKilled and start reading the topic on restart.
+            */}}
+            memory_limiter: {}
           exporters:
-            otlphttp/loki:
+            otlp_http/loki:
               endpoint: http://{{ $.Values.loki.name }}-distributor.{{ $.Values.loki.namespace }}:3100/otlp
-              retry_on_failure:
-                max_elapsed_time: 0s
               headers:
                 "X-Scope-OrgId": {{ .team }}
-            otlphttp/mimir:
-              endpoint: http://{{ $.Values.mimir.name }}-distributor.{{ $.Values.mimir.namespace }}:8080/otlp
               retry_on_failure:
+                {{- /* Setting this ensures infinite retries */}}
                 max_elapsed_time: 0s
+              sending_queue:
+                batch: {}
+            otlp_http/mimir-ingest:
+              endpoint: http://{{ $.Values.mimirIngest.name }}-distributor.{{ $.Values.mimirIngest.namespace }}:8080/otlp
               headers:
                 "X-Scope-OrgId": {{ .team }}
-            otlp/tempo:
+              retry_on_failure:
+                {{- /* Setting this ensures infinite retries */}}
+                max_elapsed_time: 0s
+              sending_queue:
+                batch: {}
+            otlp_grpc/tempo:
               endpoint: {{ $.Values.tempo.name }}-distributor.{{ $.Values.tempo.namespace }}:4317
+              headers:
+                "X-Scope-OrgId": {{ .team }}
+              retry_on_failure:
+                {{- /* Setting this ensures infinite retries */}}
+                max_elapsed_time: 0s
+              sending_queue:
+                batch: {}
               tls:
                 insecure: true
-              retry_on_failure:
-                max_elapsed_time: 0s
-              headers:
-                "X-Scope-OrgId": {{ .team }}
-            debug: null
+            debug: {}
           service:
             pipelines:
               logs:
                 receivers:
-                  - kafka/logs
-                processors:
-                  - batch
+                  - kafka
+                {{- /* We need to set this to an empty array because it is set in the upstream helm chart */}}
+                processors: []
                 exporters:
-                  - otlphttp/loki
+                  - otlp_http/loki
               metrics:
                 receivers:
-                  - kafka/metrics
-                processors:
-                  - batch
+                  - kafka
+                {{- /* We need to set this to an empty array because it is set in the upstream helm chart */}}
+                processors: []
                 exporters:
-                  - otlphttp/mimir
+                  - otlp_http/mimir-ingest
               traces:
                 receivers:
-                  - kafka/traces
-                processors:
-                  - batch
+                  - kafka
+                {{- /* We need to set this to an empty array because it is set in the upstream helm chart */}}
+                processors: []
                 exporters:
-                  - otlp/tempo
+                  - otlp_grpc/tempo
             telemetry:
               logs:
                 encoding: {{ $.Values.logFormat }}
@@ -153,7 +169,7 @@ spec:
                           endpoint: http://{{ $.Values.internalCollectorDomainName }}:4317
               {{- end }}
         image:
-          repository: container-registry.example.com/ghcr/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector
+          repository: {{ $.Values.registryGhcr }}/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector
         command:
           name: "otelcol"
         podSecurityContext:
@@ -170,16 +186,10 @@ spec:
           allowPrivilegeEscalation: false
           runAsNonRoot: true
           runAsGroup: 10001
-        extraEnvs:
-          - name: GOMEMLIMIT
-            valueFrom:
-              resourceFieldRef:
-                containerName: opentelemetry-collector
-                resource: requests.memory
         extraVolumes:
           - name: kafka
             secret:
-              secretName: kafka-example-secret-name
+              secretName: kafka-otel-user-secret
         extraVolumeMounts:
           - name: kafka
             readOnly: true
@@ -205,6 +215,14 @@ spec:
         revisionHistoryLimit: {{ $.Values.revisionHistoryLimit }}
         serviceMonitor:
           enabled: true
+          {{- /* This label is added so that the resources are picked up by the prometheus operator */}}
+          extraLabels:
+            release: prometheus
+        prometheusRule:
+          enabled: true
+          defaultRules:
+            enabled: true
+          {{- /* This label is added so that the resources are picked up by the prometheus operator */}}
           extraLabels:
             release: prometheus
   destination:
@@ -223,13 +241,15 @@ kind: VerticalPodAutoscaler
 metadata:
   name: {{ print $.Values.opentelemetryCollector.name "-" .team }}
   namespace: {{ $.Values.opentelemetryCollector.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "3"
 spec:
   targetRef:
     apiVersion: "apps/v1"
     kind: Deployment
     name: {{ print $.Values.opentelemetryCollector.name "-" .team }}
   updatePolicy:
-    updateMode: "Auto"
+    updateMode: {{ $.Values.opentelemetryCollector.autoscaling.vertical.updateMode | quote }}
 {{- end }}
 ---
 {{- $_ := required "Environment is required" $.Values.environment }}
@@ -238,10 +258,10 @@ spec:
 {{- end }}
 {{- $_ := required "Team is required in tenant" .team }}
 {{- if ( not ( regexMatch "^team-[a-z]+(?:[-][a-z]+)*$" .team ) ) }}
-{{- fail "invalid value for team, must be prefixed with 'team-' and can only contain lowercase letters eg 'team-example'" }}
+{{- fail "invalid value for team, must be prefixed with 'team-' and can only contain lowercase letters eg 'team-plattform'" }}
 {{- end }}
 {{- end }}
 {{- $_ := required "Location is required" .Values.location }}
-{{- if ( not ( or ( eq .Values.location "examplelocationfirst" ) ( eq .Values.location "examplelocationsecond" ) ) ) }}
-{{- fail "invalid value for location, must be either 'examplelocationfirst' or 'examplelocationsecond'" }}
+{{- if ( not ( or ( eq .Values.location "trd" ) ( eq .Values.location "osl" ) ) ) }}
+{{- fail "invalid value for location, must be either 'trd' or 'osl'" }}
 {{- end }}

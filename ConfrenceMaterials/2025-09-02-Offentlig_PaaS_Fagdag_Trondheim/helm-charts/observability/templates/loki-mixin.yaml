@@ -3,6 +3,8 @@ kind: PrometheusRule
 metadata:
   name: {{ .Values.loki.name }}-rules
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     release: prometheus
 spec: {{- .Files.Get "rules/loki/recording.yaml" | nindent 2 }}
@@ -12,6 +14,8 @@ kind: PrometheusRule
 metadata:
   name: {{ .Values.loki.name }}-alerts
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     release: prometheus
 spec: {{- .Files.Get "rules/loki/alerts.yaml" | nindent 2 }}
@@ -21,6 +25,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-bloom-build-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -32,6 +38,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-bloom-gateway-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -43,6 +51,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-chunks-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -54,6 +64,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-deletion-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -65,6 +77,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-logs-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -76,6 +90,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-mixin-recording-rules-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -87,6 +103,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-operational-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -98,6 +116,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-reads-resources-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -109,6 +129,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-reads-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -120,6 +142,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-retention-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -131,6 +155,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-thanos-object-storage-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -142,6 +168,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-writes-resources-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
@@ -153,6 +181,8 @@ kind: ConfigMap
 metadata:
   name: {{ .Values.loki.name }}-writes-dashboard
   namespace: {{ .Values.loki.namespace }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
   labels:
     grafana_dashboard: "1"
 data:
