@@ -1,0 +1,724 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm-keycloak-startup-script
+  namespace: keycloak
+data:
+  kc-startup-config.sh: |
+    !/bin/bash
+
+    STARTED_AT_TIME=$(date +%s)
+    echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') Staring app"
+    /opt/keycloak/bin/kc.sh start-dev &
+    echo "Waiting a bit for startup"
+    sleep 6
+    DEMO_PASSWORD=password
+    USERS_EMAIL_DOMAIN='generic.localho.st'
+
+    function CreateUserInRealm {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --username*|-u*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_USER_NAME="${1#*=}"
+            ;;
+          --password*|-p*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_USER_PASSWORD="${1#*=}"
+            ;;
+          *)
+            >&2 printf "Error: Invalid argument\n"
+            exit 1
+            ;;
+        esac
+        shift
+      done
+      echo "==> Creating demo user ${SUPPLIED_USER_NAME} in demo realm ${SUPPLIED_REALM}"
+      /opt/keycloak/bin/kcadm.sh create users \
+        --target-realm $SUPPLIED_REALM \
+        --set username=$SUPPLIED_USER_NAME \
+        --set enabled=true \
+        --set emailVerified=true \
+        --set "email=${SUPPLIED_USER_NAME}@${USERS_EMAIL_DOMAIN}" \
+        --set "firstName=${SUPPLIED_USER_NAME}Given" \
+        --set "lastName=${SUPPLIED_USER_NAME}Family" \
+        --output
+      echo "==> Setting password for demo user ${SUPPLIED_USER_NAME} in demo realm ${SUPPLIED_REALM}"
+      /opt/keycloak/bin/kcadm.sh set-password \
+        --target-realm $SUPPLIED_REALM \
+        --username $SUPPLIED_USER_NAME \
+        --new-password "$SUPPLIED_USER_PASSWORD"
+    }
+
+    function AddUserToGroup {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --username*|-u*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_USER_NAME="${1#*=}"
+            ;;
+          --groupname*|-g*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_GROUP_NAME="${1#*=}"
+            ;;
+          *)
+            >&2 printf "Error: Invalid argument\n"
+            exit 1
+            ;;
+        esac
+        shift
+      done
+      echo "==> Fetching ID of demo user \"${SUPPLIED_USER_NAME}\" in demo realm \"${SUPPLIED_REALM}\""
+      ID_USER_TO_ADD=$(/opt/keycloak/bin/kcadm.sh get users \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "username=$SUPPLIED_USER_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+      # | sed -n 's|.*"id"\s*:\s*"\([^"]*\)".*$|\1|p')
+
+      # Beware querying `search` not `name`, because interesting API design decisions: https://github.com/keycloak/keycloak/issues/19138#issuecomment-1886819021
+      echo "==> Fetching ID of demo group \"${SUPPLIED_GROUP_NAME}\" in demo realm \"${SUPPLIED_REALM}\""
+      ID_GROUP_ADDING_TO=$(/opt/keycloak/bin/kcadm.sh get groups \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "search=$SUPPLIED_GROUP_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+      #| sed -n 's|.*"id"\s*:\s*"\([^"]*\)".*$|\1|p')
+      # $ kcadm.sh update users/b544f379-5fc4-49e5-8a8d-5cfb71f46f53/groups/ce01117a-7426-4670-a29a-5c118056fe20 -r demorealm -s realm=demorealm -s userId=b544f379-5fc4-49e5-8a8d-5cfb71f46f53 -s groupId=ce01117a-7426-4670-a29a-5c118056fe20 -n
+
+      # USER_TO_GROUP_ENDPOINT_STRING="users/${ID_USER_TO_ADD}/groups/${ID_GROUP_ADDING_TO}"
+      echo "Adding user \"${SUPPLIED_USER_NAME}\" (ID: \"${ID_USER_TO_ADD}\") to group \"${SUPPLIED_GROUP_NAME}\" (ID: \"${ID_GROUP_ADDING_TO}\") in realm \"${SUPPLIED_REALM}\""
+      # echo "Using endpoint string ${USER_TO_GROUP_ENDPOINT_STRING}"
+      /opt/keycloak/bin/kcadm.sh update \
+        "users/${ID_USER_TO_ADD}/groups/${ID_GROUP_ADDING_TO}" \
+        --target-realm $SUPPLIED_REALM \
+        --set "userId=${ID_USER_TO_ADD}" \
+        --set "groupId=${ID_GROUP_ADDING_TO}" \
+        --no-merge
+      # --output # Not available for this command, will just print error 404 after successfully executing
+    }
+
+    function AddUserToSubGroup {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --username*|-u*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_USER_NAME="${1#*=}"
+            ;;
+          --groupname*|-g*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_GROUP_NAME="${1#*=}"
+            ;;
+          --subgroupname*|-s*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_SUB_GROUP_NAME="${1#*=}"
+            ;;
+          *)
+            >&2 printf "Error: Invalid argument\n"
+            exit 1
+            ;;
+        esac
+        shift
+      done
+      echo "==> Fetching ID of demo user \"${SUPPLIED_USER_NAME}\" in demo realm \"${SUPPLIED_REALM}\""
+      ID_USER_TO_ADD=$(/opt/keycloak/bin/kcadm.sh get users \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "username=$SUPPLIED_USER_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+
+      echo "==> Fetching ID of demo group \"${SUPPLIED_GROUP_NAME}\" in demo realm \"${SUPPLIED_REALM}\""
+      ID_GROUP_ADDING_TO=$(/opt/keycloak/bin/kcadm.sh get groups \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "search=$SUPPLIED_GROUP_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+      ID_SUB_GROUP_ADDING_TO=$(/opt/keycloak/bin/kcadm.sh get \
+        "groups/$ID_GROUP_ADDING_TO/children" \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "search=$SUPPLIED_SUB_GROUP_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+
+      /opt/keycloak/bin/kcadm.sh update \
+        "users/${ID_USER_TO_ADD}/groups/${ID_SUB_GROUP_ADDING_TO}" \
+        --target-realm $SUPPLIED_REALM \
+        --set "userId=${ID_USER_TO_ADD}" \
+        --set "groupId=${ID_SUB_GROUP_ADDING_TO}" \
+        --no-merge
+    }
+
+    function AddAudienceMapperToClient {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --clientid*|-c*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_CLIENT_ID="${1#*=}"
+            ;;
+          --audience*|-a*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_AUDIENCE="${1#*=}"
+            ;;
+          *)
+            >&2 printf "Error: Invalid argument\n"
+            exit 1
+            ;;
+        esac
+        shift
+      done
+      echo "==> Creating mappers to attach audience $SUPPLIED_AUDIENCE to client $SUPPLIED_CLIENT_ID in realm $SUPPLIED_REALM"
+      /opt/keycloak/bin/kcadm.sh create \
+        clients/$SUPPLIED_CLIENT_ID/protocol-mappers/models \
+        --target-realm $SUPPLIED_REALM \
+        --set "name=kafka-audience" \
+        --set "consentRequired=false" \
+        --set "protocol=openid-connect" \
+        --set "protocolMapper=oidc-audience-mapper" \
+        --set "config.\"included.client.audience\"=\"$SUPPLIED_AUDIENCE\"" \
+        --set "config.\"id.token.claim\"=true" \
+        --set "config.\"access.token.claim\"=true" \
+        --output
+      # Created mappers can be checked out in webui under ream -> client -> pick one -> client scopes -> click linked "assigned client scope"
+    }
+
+    while :
+    do
+      exec 3<>/dev/tcp/127.0.0.1/9000
+      echo -e 'GET /health/ready HTTP/1.1\nhost: http://localhost/auth\nConnection: close\n\n' >&3
+      if [ $? -eq 0 ]
+      then
+        echo '==> KC Ready'
+        break
+      fi
+      echo "==> KC not ready, sleeping a bit and checking again"
+      sleep 2
+    done
+
+    echo "Configuring realms and users"
+    echo "==> Configuring admin connection"
+    /opt/keycloak/bin/kcadm.sh config credentials \
+      --server "http://localhost:$KC_HTTP_PORT" \
+      --realm master \
+      --user $KC_BOOTSTRAP_ADMIN_USERNAME \
+      --password $KC_BOOTSTRAP_ADMIN_PASSWORD
+    echo "==> Disabling SSL Required on master realm, because source of noise for local dev use"
+    /opt/keycloak/bin/kcadm.sh update realms/master \
+      --set sslRequired=NONE
+
+    echo "==> Creating demo realm"
+    /opt/keycloak/bin/kcadm.sh create realms \
+      --set realm=$SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set enabled=true \
+      --set sslRequired=NONE \
+      --output
+    echo "==> Creating demo oauth client registration in demo realm"
+    /opt/keycloak/bin/kcadm.sh create clients \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set id="$SETUP_SCRIPT_EXAMPLE_CLIENT_KCID" \
+      --set clientId=$SETUP_SCRIPT_EXAMPLE_CLIENT_NAME \
+      --set publicClient="true" \
+      --set "redirectUris=[\"*\"]" \
+      --set "webOrigins=[\"*\"]" \
+      --set directAccessGrantsEnabled=true \
+      --set enabled=true \
+      --output
+    echo "===> Creating client scope openid needed by legacy client"
+    /opt/keycloak/bin/kcadm.sh create client-scopes \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set id="openid_scope_id" \
+      --set name="openid" \
+      --set protocol=openid-connect \
+      --set 'attributes."include.in.token.scope"=true' \
+      --output
+    echo "==> Adding scope openid to client $SETUP_SCRIPT_EXAMPLE_CLIENT_NAME"
+    /opt/keycloak/bin/kcadm.sh update \
+      clients/$SETUP_SCRIPT_EXAMPLE_CLIENT_KCID/default-client-scopes/openid_scope_id \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME
+    echo "==> Creating demo role in demo client in demo realm"
+    /opt/keycloak/bin/kcadm.sh create \
+      clients/$SETUP_SCRIPT_EXAMPLE_CLIENT_KCID/roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set name=$SETUP_SCRIPT_EXAMPLE_CLIENT_ROLE_NAME \
+      --set "description=Custom client role" \
+      --output
+    echo "==> Creating demo role in demo realm"
+    /opt/keycloak/bin/kcadm.sh create roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set name=$SETUP_SCRIPT_EXAMPLE_ROLE_NAME \
+      --output
+    echo "==> Creating demo group in demo realm"
+    /opt/keycloak/bin/kcadm.sh create groups \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set name=$SETUP_SCRIPT_EXAMPLE_GROUP_NAME \
+      --output
+    echo "==> Creating demo group for admins in demo realm"
+    /opt/keycloak/bin/kcadm.sh create groups \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set name=$SETUP_SCRIPT_EXAMPLE_GROUP_NAME_ADMINS \
+      --output
+    echo "==> Creating demo group for RO users in demo realm"
+    /opt/keycloak/bin/kcadm.sh create groups \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set name=$SETUP_SCRIPT_EXAMPLE_GROUP_NAME_RO_USERS \
+      --output
+    echo "==> Creating group mapper for demo client so that groups gets included in tokens"
+    /opt/keycloak/bin/kcadm.sh create \
+      clients/$SETUP_SCRIPT_EXAMPLE_CLIENT_KCID/protocol-mappers/models \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set "name=groups" \
+      --set "protocol=openid-connect" \
+      --set "protocolMapper=oidc-group-membership-mapper" \
+      --set "config.\"full.path\"=false" \
+      --set "config.\"introspection.token.claim\"=true" \
+      --set "config.\"multivalued\"=true" \
+      --set "config.\"id.token.claim\"=true" \
+      --set "config.\"access.token.claim\"=true" \
+      --set "config.\"userinfo.token.claim\"=true" \
+      --set "config.\"claim.name\"=groups" \
+      --set "config.\"jsonType.label\"=string" \
+      --output
+    echo "==> Creating role mapper for demo client so that realm roles gets included in tokens"
+    /opt/keycloak/bin/kcadm.sh create \
+      clients/$SETUP_SCRIPT_EXAMPLE_CLIENT_KCID/protocol-mappers/models \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set "name=roles-realm" \
+      --set "protocol=openid-connect" \
+      --set "protocolMapper=oidc-usermodel-realm-role-mapper" \
+      --set "config.\"introspection.token.claim\"=true" \
+      --set "config.\"multivalued\"=true" \
+      --set "config.\"id.token.claim\"=true" \
+      --set "config.\"access.token.claim\"=true" \
+      --set "config.\"claim.name\"=roles" \
+      --set "config.\"jsonType.label\"=string" \
+      --output
+    echo "==> Creating role mapper for demo client so that client roles gets included in tokens"
+    /opt/keycloak/bin/kcadm.sh create \
+      clients/$SETUP_SCRIPT_EXAMPLE_CLIENT_KCID/protocol-mappers/models \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --set "name=roles-client" \
+      --set "protocol=openid-connect" \
+      --set "protocolMapper=oidc-usermodel-client-role-mapper" \
+      --set "config.\"introspection.token.claim\"=true" \
+      --set "config.\"multivalued\"=true" \
+      --set "config.\"id.token.claim\"=true" \
+      --set "config.\"access.token.claim\"=true" \
+      --set "config.\"claim.name\"=roles" \
+      --set "config.\"jsonType.label\"=string" \
+      --output
+
+    echo "==> Creating demo users in demo realm"
+    CreateUserInRealm --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "demo-admin" --password $DEMO_PASSWORD
+    CreateUserInRealm --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "user" --password $DEMO_PASSWORD
+    CreateUserInRealm --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "admin" --password $DEMO_PASSWORD
+    CreateUserInRealm --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "user-ro" --password $DEMO_PASSWORD
+    CreateUserInRealm --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "simon" --password $DEMO_PASSWORD
+    CreateUserInRealm --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "fredrik" --password $DEMO_PASSWORD
+
+    echo "==> Assigning realm roles to demo users"
+
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "demo-admin" \
+      --rolename $SETUP_SCRIPT_EXAMPLE_ROLE_NAME
+
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "user" \
+      --rolename $SETUP_SCRIPT_EXAMPLE_ROLE_NAME
+
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "admin" \
+      --rolename $SETUP_SCRIPT_EXAMPLE_ROLE_NAME
+
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "user-ro" \
+      --rolename $SETUP_SCRIPT_EXAMPLE_ROLE_NAME
+
+    echo "==> Assigning client roles to demo users"
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "user" \
+      --cclientid $SETUP_SCRIPT_EXAMPLE_CLIENT_NAME \
+      --rolename $SETUP_SCRIPT_EXAMPLE_CLIENT_ROLE_NAME
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "admin" \
+      --cclientid $SETUP_SCRIPT_EXAMPLE_CLIENT_NAME \
+      --rolename $SETUP_SCRIPT_EXAMPLE_CLIENT_ROLE_NAME
+    /opt/keycloak/bin/kcadm.sh add-roles \
+      --target-realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME \
+      --uusername "user-ro" \
+      --cclientid $SETUP_SCRIPT_EXAMPLE_CLIENT_NAME \
+      --rolename $SETUP_SCRIPT_EXAMPLE_CLIENT_ROLE_NAME
+
+    echo "==> Assigning groups to demo users"
+
+    AddUserToGroup --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "admin" --groupname $SETUP_SCRIPT_EXAMPLE_GROUP_NAME_ADMINS
+    AddUserToGroup --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "user" --groupname $SETUP_SCRIPT_EXAMPLE_GROUP_NAME
+    AddUserToGroup --realm $SETUP_SCRIPT_EXAMPLE_REALM_NAME --username "user-ro" --groupname $SETUP_SCRIPT_EXAMPLE_GROUP_NAME_RO_USERS
+
+
+    echo "==> Creating Kafka realm"
+    /opt/keycloak/bin/kcadm.sh create realms \
+      --set realm=$SETUP_SCRIPT_KAFKA_REALM_NAME \
+      --set enabled=true \
+      --set sslRequired=NONE \
+      --output
+
+    function SetupKafkaBrokerClient {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --client-kcid*|-i*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_BROKER_ID="${1#*=}"
+            ;;
+          --client_clientid*|-c*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_BROKER_CLIENTID="${1#*=}"
+            ;;
+          --client_secret*|-s*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_CLIENT_SECRET="${1#*=}"
+            ;;
+          *)
+            >&2 printf "Error: Invalid argument\n"
+            exit 1
+            ;;
+        esac
+        shift
+      done
+      echo "==> Creating Kafka oauth client registration in Kafka realm"
+      /opt/keycloak/bin/kcadm.sh create clients \
+        --target-realm $SUPPLIED_REALM \
+        --set id="$SUPPLIED_BROKER_ID" \
+        --set clientId=$SUPPLIED_BROKER_CLIENTID \
+        --set name=$SUPPLIED_BROKER_CLIENTID \
+        --set protocol="openid-connect" \
+        --set publicClient="false" \
+        --set clientAuthenticatorType="client-secret" \
+        --set secret="$SUPPLIED_CLIENT_SECRET" \
+        --set bearerOnly="false" \
+        --set directAccessGrantsEnabled="false" \
+        --set serviceAccountsEnabled="true" \
+        --set standardFlowEnabled="false" \
+        --set authorizationServicesEnabled="true" \
+        --set 'attributes."access.token.lifespan"="600"' \
+        --set "defaultClientScopes=[\"openid\",\"profile\"]" \
+        --set "optionalClientScopes=[]" \
+        --set "protocolMappers=[]" \
+        --set "redirectUris=[\"*\"]" \
+        --set "webOrigins=[\"*\"]" \
+        --set enabled=true \
+        --output
+
+      echo "==> Creating audience mappers for kafka clients so that token audience becomes expected kafka-broker"
+      AddAudienceMapperToClient --realm $SUPPLIED_REALM \
+        --clientid $SUPPLIED_BROKER_ID \
+        --audience "kafka-broker"
+
+      echo "==> Configuring broker client to strictly enforce autz"
+      /opt/keycloak/bin/kcadm.sh update "clients/$SUPPLIED_BROKER_ID/authz/resource-server" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set 'allowRemoteResourceManagement=true' \
+        --set 'policyEnforcementMode=ENFORCING' \
+        --set 'decisionStrategy=AFFIRMATIVE'
+
+      for s in Create Write Read Delete Describe Alter DescribeConfigs AlterConfigs ClusterAction IdempotentWrite All
+      do
+        echo "==> Creating scope ${s} in client ${SUPPLIED_BROKER_ID} in realm ${SUPPLIED_REALM}"
+        /opt/keycloak/bin/kcadm.sh create \
+          "clients/$SUPPLIED_BROKER_ID/authz/resource-server/scope" \
+          --target-realm $SUPPLIED_REALM \
+          --set "name=${s}" \
+          --set "displayName=${s} kafka operation"
+      done
+      echo "==> Done Creating broker $SUPPLIED_BROKER_ID oauth client registration in $SUPPLIED_REALM realm"
+    }
+
+    SetupKafkaBrokerClient --realm $SETUP_SCRIPT_KAFKA_REALM_NAME \
+      --client-kcid $SETUP_SCRIPT_KAFKA_BROKERS_KCID \
+      --client_clientid $SETUP_SCRIPT_KAFKA_BROKERS_CLIENTID \
+      --client_secret $SETUP_SCRIPT_KAFKA_BROKERS_CLIENTSECRET
+
+    function AddPolicyToSubGroup {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --client-kcid*|-c*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_CLIENT_ID="${1#*=}"
+            ;;
+          --group-name*|-g*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_GROUP_NAME="${1#*=}"
+            ;;
+          --subgroup-name*|-s*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_SUB_GROUP_NAME="${1#*=}"
+            ;;
+          *)
+            >&2 printf "Error: Invalid argument\n"
+            exit 1
+            ;;
+        esac
+        shift
+      done
+
+      echo "==> Fetching ID of group \"${SUPPLIED_GROUP_NAME}\" in realm \"${SUPPLIED_REALM}\""
+      ID_GROUP_ADDING_TO=$(/opt/keycloak/bin/kcadm.sh get groups \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "search=$SUPPLIED_GROUP_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+      echo "==> Fetching ID of sub-group \"${SUPPLIED_SUB_GROUP_NAME}\" under group with ID ${ID_GROUP_ADDING_TO} in realm \"${SUPPLIED_REALM}\""
+      ID_SUB_GROUP_ADDING_TO=$(/opt/keycloak/bin/kcadm.sh get \
+        "groups/$ID_GROUP_ADDING_TO/children" \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "search=$SUPPLIED_SUB_GROUP_NAME" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+      echo "==> Adding policy to sub-group \"${SUPPLIED_SUB_GROUP_NAME}\" with ID ${ID_SUB_GROUP_ADDING_TO} of client ${SUPPLIED_CLIENT_ID} in realm \"${SUPPLIED_REALM}\""
+      /opt/keycloak/bin/kcadm.sh create \
+        "clients/${SUPPLIED_CLIENT_ID}/authz/resource-server/policy/group" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set name="${SUPPLIED_SUB_GROUP_NAME}-policy" \
+        --set description="Policy granting access to group ${SUPPLIED_SUB_GROUP_NAME}" \
+        --set type=group \
+        --set logic=POSITIVE \
+        --set decisionStrategy=UNANIMOUS \
+        --set 'groups=[{"id":"'"$ID_SUB_GROUP_ADDING_TO"'"}]'
+    }
+
+    echo "==> Function definition for adding kafka tenant"
+    function AddKafkaTenant {
+      while [ $# -gt 0 ]; do
+        case "$1" in
+          --realm*|-r*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_REALM="${1#*=}"
+            ;;
+          --broker-client-id*|-b*)
+            if [[ "$1" != *=* ]]; then shift; fi
+            SUPPLIED_BROKER_CLIENT_ID="${1#*=}"
+            ;;
+          --tenant-client-kcid*|-t*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_CLIENT_KC_ID="${1#*=}"
+            ;;
+          --tenant-client-clientid*|-c*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_CLIENT_CLIENTID="${1#*=}"
+            ;;
+          --tenant-client-client-secret*|-s*)
+            if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
+            SUPPLIED_CLIENT_SECRET="${1#*=}"
+            ;;
+          *)
+            >&2 printf "AddKafkaTenant Error: Invalid argument %s\n" "$1" >&2
+            exit 1
+            ;;
+        esac
+        shift
+      done
+      echo "==> Creating Kafka oauth client registration for tenant client ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      /opt/keycloak/bin/kcadm.sh create clients \
+        --target-realm $SUPPLIED_REALM \
+        --set id="$SUPPLIED_CLIENT_KC_ID" \
+        --set clientId=$SUPPLIED_CLIENT_CLIENTID \
+        --set name=$SUPPLIED_CLIENT_CLIENTID \
+        --set protocol="openid-connect" \
+        --set publicClient="false" \
+        --set clientAuthenticatorType="client-secret" \
+        --set secret="$SUPPLIED_CLIENT_SECRET" \
+        --set bearerOnly="false" \
+        --set directAccessGrantsEnabled="false" \
+        --set serviceAccountsEnabled="true" \
+        --set standardFlowEnabled="false" \
+        --set authorizationServicesEnabled="false" \
+        --set 'attributes."access.token.lifespan"="600"' \
+        --set "defaultClientScopes=[\"openid\",\"profile\"]" \
+        --set "optionalClientScopes=[]" \
+        --set "protocolMappers=[]" \
+        --set "redirectUris=[\"*\"]" \
+        --set "webOrigins=[\"*\"]" \
+        --set enabled=true \
+        --output
+
+      echo "==> Creating audience mapper for client ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      AddAudienceMapperToClient --realm $SUPPLIED_REALM \
+        --clientid $SUPPLIED_CLIENT_KC_ID \
+        --audience "kafka-broker"
+
+      echo "==> Creating group for tenant ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      /opt/keycloak/bin/kcadm.sh create groups \
+        --target-realm $SUPPLIED_REALM \
+        --set name=$SUPPLIED_CLIENT_CLIENTID \
+        --output
+      echo "==> Retrieving ID of created group for tenant ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      ID_GROUP_SUPPLIED_TENANT_CLIENT=$(/opt/keycloak/bin/kcadm.sh get groups \
+        --target-realm $SUPPLIED_REALM \
+        --query "exact=true" \
+        --query "search=$SUPPLIED_CLIENT_CLIENTID" \
+        --fields "id" \
+        --format "csv" \
+        --noquotes)
+      echo "==> Creating reader subgroup for tenant ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      /opt/keycloak/bin/kcadm.sh create groups/$ID_GROUP_SUPPLIED_TENANT_CLIENT/children \
+        --target-realm $SUPPLIED_REALM \
+        --set name=$SUPPLIED_CLIENT_CLIENTID-reader
+      echo "==> Creating writer subgroup for tenant ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      /opt/keycloak/bin/kcadm.sh create groups/$ID_GROUP_SUPPLIED_TENANT_CLIENT/children \
+        --target-realm $SUPPLIED_REALM \
+        --set name=$SUPPLIED_CLIENT_CLIENTID-writer
+      echo "==> Adding client service account user to reader subgroup for tenant ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      AddUserToSubGroup --realm $SUPPLIED_REALM \
+        --username "service-account-$SUPPLIED_CLIENT_CLIENTID" \
+        --groupname "$SUPPLIED_CLIENT_CLIENTID" \
+        --subgroupname "$SUPPLIED_CLIENT_CLIENTID-reader"
+      echo "==> Adding client service account user to writer subgroup for tenant ${SUPPLIED_CLIENT_CLIENTID} in ${SUPPLIED_REALM} realm"
+      AddUserToSubGroup --realm $SUPPLIED_REALM \
+        --username "service-account-$SUPPLIED_CLIENT_CLIENTID" \
+        --groupname "$SUPPLIED_CLIENT_CLIENTID" \
+        --subgroupname "$SUPPLIED_CLIENT_CLIENTID-writer"
+      echo "==> Adding topic scopes to tenant client ${SUPPLIED_CLIENT_CLIENTID} in realm ${SETUP_SCRIPT_KAFKA_REALM_NAME}"
+      /opt/keycloak/bin/kcadm.sh create \
+        "clients/${SUPPLIED_BROKER_CLIENT_ID}/authz/resource-server/resource" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set name="Topic:${SUPPLIED_CLIENT_CLIENTID}-*" \
+        --set displayName="Topic:${SUPPLIED_CLIENT_CLIENTID}-*" \
+        --set 'scopes=[
+            {"name":"Alter"},
+            {"name":"AlterConfigs"},
+            {"name":"Create"},
+            {"name":"Delete"},
+            {"name":"Describe"},
+            {"name":"DescribeConfigs"},
+            {"name":"IdempotentWrite"},
+            {"name":"Read"},
+            {"name":"Write"}
+          ]' \
+        --set ownerManagedAccess=false \
+        --output
+      echo "==> Adding group scopes to tenant client ${SUPPLIED_CLIENT_CLIENTID} in realm ${SETUP_SCRIPT_KAFKA_REALM_NAME}"
+      /opt/keycloak/bin/kcadm.sh create \
+        "clients/${SUPPLIED_BROKER_CLIENT_ID}/authz/resource-server/resource" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set name="Group:${SUPPLIED_CLIENT_CLIENTID}-*" \
+        --set displayName="Group:${SUPPLIED_CLIENT_CLIENTID}-*" \
+        --set 'scopes=[
+            {"name":"Delete"},
+            {"name":"Describe"},
+            {"name":"Read"}
+          ]' \
+        --set ownerManagedAccess=false \
+        --output
+      echo "==> Adding reader policy to tenant client ${SUPPLIED_CLIENT_CLIENTID} in realm ${SETUP_SCRIPT_KAFKA_REALM_NAME}"
+      AddPolicyToSubGroup --realm $SUPPLIED_REALM \
+        --client-kcid $SUPPLIED_BROKER_CLIENT_ID \
+        --group-name $SUPPLIED_CLIENT_CLIENTID \
+        --subgroup-name $SUPPLIED_CLIENT_CLIENTID-reader
+      echo "==> Adding writer policy to tenant client ${SUPPLIED_CLIENT_CLIENTID} in realm ${SETUP_SCRIPT_KAFKA_REALM_NAME}"
+      AddPolicyToSubGroup --realm $SUPPLIED_REALM \
+        --client-kcid $SUPPLIED_BROKER_CLIENT_ID \
+        --group-name $SUPPLIED_CLIENT_CLIENTID \
+        --subgroup-name $SUPPLIED_CLIENT_CLIENTID-writer
+
+      echo "==> Creating topic read policy permissions for ${SUPPLIED_CLIENT_CLIENTID}"
+      /opt/keycloak/bin/kcadm.sh create \
+        "clients/${SUPPLIED_BROKER_CLIENT_ID}/authz/resource-server/permission/scope" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set "name=${SUPPLIED_CLIENT_CLIENTID}-read-topics" \
+        --set "description=Allow ${SUPPLIED_CLIENT_CLIENTID} to read from topics ${SUPPLIED_CLIENT_CLIENTID}-* with policy ${SUPPLIED_CLIENT_CLIENTID}-reader-policy" \
+        --set "resources=[\"Topic:${SUPPLIED_CLIENT_CLIENTID}-*\"]" \
+        --set "scopes=[\"Read\",\"Describe\"]" \
+        --set "policies=[\"${SUPPLIED_CLIENT_CLIENTID}-reader-policy\"]" \
+        --set "decisionStrategy=AFFIRMATIVE" \
+        --output
+      echo "==> Creating group policy permissions for ${SUPPLIED_CLIENT_CLIENTID}"
+      /opt/keycloak/bin/kcadm.sh create \
+        "clients/${SUPPLIED_BROKER_CLIENT_ID}/authz/resource-server/permission/scope" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set "name=${SUPPLIED_CLIENT_CLIENTID}-consumer-group" \
+        --set "description=Allow ${SUPPLIED_CLIENT_CLIENTID} to use consumer-group Group: ${SUPPLIED_CLIENT_CLIENTID}-* with policy ${SUPPLIED_CLIENT_CLIENTID}-reader-policy" \
+        --set "resources=[\"Group:${SUPPLIED_CLIENT_CLIENTID}-*\"]" \
+        --set "scopes=[\"Read\",\"Describe\"]" \
+        --set "policies=[\"${SUPPLIED_CLIENT_CLIENTID}-reader-policy\"]" \
+        --set "decisionStrategy=AFFIRMATIVE" \
+        --output
+      echo "==> Creating topic write policy permissions for ${SUPPLIED_CLIENT_CLIENTID}"
+      /opt/keycloak/bin/kcadm.sh create \
+        "clients/${SUPPLIED_BROKER_CLIENT_ID}/authz/resource-server/permission/scope" \
+        --target-realm "$SUPPLIED_REALM" \
+        --set "name=${SUPPLIED_CLIENT_CLIENTID}-write-topics" \
+        --set "description=Allow ${SUPPLIED_CLIENT_CLIENTID} to write to topics ${SUPPLIED_CLIENT_CLIENTID}-* with policy ${SUPPLIED_CLIENT_CLIENTID}-writer-policy" \
+        --set "resources=[\"Topic:${SUPPLIED_CLIENT_CLIENTID}-*\"]" \
+        --set "scopes=[\"Write\",\"Describe\"]" \
+        --set "policies=[\"${SUPPLIED_CLIENT_CLIENTID}-writer-policy\"]" \
+        --set "decisionStrategy=AFFIRMATIVE" \
+        --output
+    }
+
+    echo "==> Setting up kafka tenant $SETUP_SCRIPT_KAFKA_TENANT_A_CLIENTID"
+    AddKafkaTenant --realm $SETUP_SCRIPT_KAFKA_REALM_NAME \
+      --broker-client-id $SETUP_SCRIPT_KAFKA_BROKERS_KCID \
+      --tenant-client-kcid $SETUP_SCRIPT_KAFKA_TENANT_A_KCID \
+      --tenant-client-clientid $SETUP_SCRIPT_KAFKA_TENANT_A_CLIENTID \
+      --tenant-client-client-secret $SETUP_SCRIPT_KAFKA_TENANT_A_CLIENTSECRET
+    echo "==> Setting up kafka tenant $SETUP_SCRIPT_KAFKA_TENANT_B_CLIENTID"
+    AddKafkaTenant --realm $SETUP_SCRIPT_KAFKA_REALM_NAME \
+      --broker-client-id $SETUP_SCRIPT_KAFKA_BROKERS_KCID \
+      --tenant-client-kcid $SETUP_SCRIPT_KAFKA_TENANT_B_KCID \
+      --tenant-client-clientid $SETUP_SCRIPT_KAFKA_TENANT_B_CLIENTID \
+      --tenant-client-client-secret $SETUP_SCRIPT_KAFKA_TENANT_B_CLIENTSECRET
+    AddKafkaTenant --realm $SETUP_SCRIPT_KAFKA_REALM_NAME \
+      --broker-client-id $SETUP_SCRIPT_KAFKA_BROKERS_KCID \
+      --tenant-client-kcid $SETUP_SCRIPT_KAFKA_TENANT_SCHEMA_REGISTRY_KCID \
+      --tenant-client-clientid $SETUP_SCRIPT_KAFKA_TENANT_SCHEMA_REGISTRY_CLIENTID \
+      --tenant-client-client-secret $SETUP_SCRIPT_KAFKA_TENANT_SCHEMA_REGISTRY_CLIENTSECRET
+
+    touch /tmp/demo-startup-config-done
+    echo "$(date -u +'%Y-%m-%dT%H:%M:%SZ') Demo setup done"
+    FINISHED_AT_TIME=$(date +%s)
+    TIME_TAKEN=$(($FINISHED_AT_TIME-$STARTED_AT_TIME))
+    echo "Startup took $TIME_TAKEN seconds"
+    echo "Keeping container alive indefinitely untill it's shut down from the outside"
+    echo "To get user access token run curl --request POST --url http://keycloak.localho.st:8080/realms/$SETUP_SCRIPT_EXAMPLE_REALM_NAME/protocol/openid-connect/token --header 'Content-Type: application/x-www-form-urlencoded' --data client_id=$SETUP_SCRIPT_EXAMPLE_CLIENT_NAME --data username=demo-admin --data password=password --data realm=$SETUP_SCRIPT_EXAMPLE_REALM_NAME --data grant_type=password"

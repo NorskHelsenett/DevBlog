@@ -1,0 +1,13 @@
+# helm show values oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack | pbcopy
+## Using default values from https://github.com/grafana-community/helm-charts/blob/main/charts/grafana/values.yaml
+grafana:
+  grafana.ini:
+    analytics:
+      check_for_updates: false
+    auth:
+      disable_login_form: true
+    auth.anonymous:
+      enabled: true
+      org_role: Admin
+    auth.basic:
+      enabled: false

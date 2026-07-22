@@ -1,0 +1,234 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: ns-external-secrets-in-cluster-store
+    name: ns-external-secrets-in-cluster-store
+  name: ns-external-secrets-in-cluster-store
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: ns-external-secrets-service-account
+    name: ns-external-secrets-service-account
+  name: ns-external-secrets-service-account
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  labels:
+    kubernetes.io/metadata.name: ns-external-secrets-examples
+    name: ns-external-secrets-examples
+  name: ns-external-secrets-examples
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: cr-external-secrets-in-cluster-store
+  # No need to specify namespace, cluster roles are not namespace bound
+rules:
+  - apiGroups: [""]
+    resources:
+      - secrets
+    # "Get", "list", and "watch" are needed for read access
+    verbs:
+      - get
+      - list
+      - watch
+      - create
+      - update
+      - patch
+      - delete
+  # This will allow the role `eso-store-role` to perform **permission reviews** for itself within the defined namespace:
+  - apiGroups:
+      - authorization.k8s.io
+    resources:
+      - selfsubjectrulesreviews # used to review or fetch the list of permissions a user or service account currently has.
+    verbs:
+      - create # `create` allows creating a `selfsubjectrulesreviews` request.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: sa-external-secrets-in-cluster-store
+  namespace: ns-external-secrets-service-account
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eso-bind-in-cluster-store-role-to-sa
+  # No need to specify namespace, cluster roles are cluster wide
+subjects:
+  - kind: ServiceAccount
+    name: sa-external-secrets-in-cluster-store
+    namespace: ns-external-secrets-service-account
+roleRef:
+  kind: ClusterRole
+  name: cr-external-secrets-in-cluster-store
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: css-eso-cluster-secret-store
+  # No need to specify namespace, cluster resource is cluster wide
+spec:
+  provider:
+    kubernetes:
+      remoteNamespace: ns-external-secrets-in-cluster-store
+      # Using a serviceAccount that can read the source secret
+      auth:
+        serviceAccount:
+          name: sa-external-secrets-in-cluster-store
+          namespace: ns-external-secrets-service-account
+      server:
+        url: kubernetes.default
+        caProvider:
+          # By magiv exists by default
+          type: ConfigMap
+          name: kube-root-ca.crt
+          namespace: ns-external-secrets-service-account
+          key: ca.crt
+---
+# From here on are example resources
+apiVersion: generators.external-secrets.io/v1alpha1
+kind: Password
+metadata:
+  name: example-eso-app-restriction-specific-password-generator
+  namespace: ns-external-secrets-in-cluster-store
+spec:
+  length: 42
+  digits: 5
+  symbols: 5
+  symbolCharacters: "-_$@"
+  noUpper: false
+  allowRepeat: true
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: example-pushsecret-app-password
+  namespace: ns-external-secrets-in-cluster-store # Same NS as generator resource
+spec:
+  # refreshInterval: 6h0m0s # Doesn't work (just commenting this out)
+  # updatePolicy: IfNotExists # Doesn't work
+  refreshInterval: "0"
+  secretStoreRefs:
+    - name: css-eso-cluster-secret-store
+      kind: ClusterSecretStore
+  selector:
+    generatorRef:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: example-eso-app-restriction-specific-password-generator # Matches generator name defined above
+  data:
+    - match:
+        secretKey: password # property in the generator output
+        remoteRef:
+          remoteKey: app-password-secret # Remote reference (where the secret is going to be pushed)
+          property: app-password-secret-key # the property to use to push into
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: example-eso-create-secret-for-use-by-app
+  namespace: ns-external-secrets-examples # where you want the new secret
+spec:
+  refreshPolicy: CreatedOnce
+  secretStoreRef:
+    name: css-eso-cluster-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: example-app-credentials
+    creationPolicy: Owner
+    template:
+      type: kubernetes.io/basic-auth # Note that this type is because the inspiration of this post is from cnpg use, regular secret would have type Opaque as demonstrated in secret below
+      metadata:
+        labels:
+          cnpg.io/reload: "true"
+      data:
+        username: 'apps-username-for-instance'
+        password: '{{ .retrievedpassword }}' # Helm escaped variant: '{{"{{ .retrievedpassword }}"}}'
+  data:
+    - secretKey: retrievedpassword # Key used for lookup in templating above in target section
+      remoteRef:
+        key: app-password-secret
+        property: app-password-secret-key
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: example-eso-create-alternative-secret-for-use-by-app
+  namespace: ns-external-secrets-examples # where you want the new secret
+spec:
+  refreshPolicy: CreatedOnce
+  secretStoreRef:
+    name: css-eso-cluster-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: example-alternative-app-credentials
+    # creationPolicy: Owner
+    template:
+      type: Opaque
+      data:
+        connectionString: 'you would put our secret {{ .retrievedpassword }} in a thing like this?' # Helm escaped variant: 'you would put our secret {{"{{ .retrievedpassword }}"}} in a thing like this?'
+  data:
+    - secretKey: retrievedpassword # Key used for lookup in templating above in target section
+      remoteRef:
+        key: app-password-secret
+        property: app-password-secret-key
+---
+apiVersion: external-secrets.io/v1alpha1
+kind: PushSecret
+metadata:
+  name: example-pushsecret-other-password
+  namespace: ns-external-secrets-in-cluster-store # Same NS as generator resource
+spec:
+  # refreshInterval: 6h0m0s # Doesn't work (just commenting this out)
+  # updatePolicy: IfNotExists # Doesn't work
+  refreshInterval: "0"
+  secretStoreRefs:
+    - name: css-eso-cluster-secret-store
+      kind: ClusterSecretStore
+  selector:
+    generatorRef:
+      apiVersion: generators.external-secrets.io/v1alpha1
+      kind: Password
+      name: example-eso-app-restriction-specific-password-generator # Matches generator name defined above
+  data:
+    - match:
+        secretKey: password # property in the generator output
+        remoteRef:
+          remoteKey: other-password-secret # Remote reference (where the secret is going to be pushed)
+          property: other-password-secret-key # the property to use to push into
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: example-eso-create-composite-secret
+  namespace: ns-external-secrets-examples # where you want the new secret
+spec:
+  refreshPolicy: CreatedOnce
+  secretStoreRef:
+    name: css-eso-cluster-secret-store
+    kind: ClusterSecretStore
+  target:
+    name: example-composite-credentials
+    # creationPolicy: Owner
+    template:
+      type: Opaque
+      data:
+        FIRST_USERNAME: first
+        FIRST_PASSWORD: '{{ .firstpassword }}'
+        SECOND_USERNAME: second
+        SECOND_PASSWORD: '{{ .secondpassword }}'
+  data:
+    - secretKey: firstpassword # Key used for lookup in templating above in target section
+      remoteRef:
+        key: app-password-secret
+        property: app-password-secret-key
+    - secretKey: secondpassword # Key used for lookup in templating above in target section
+      remoteRef:
+        key: other-password-secret
+        property: other-password-secret-key

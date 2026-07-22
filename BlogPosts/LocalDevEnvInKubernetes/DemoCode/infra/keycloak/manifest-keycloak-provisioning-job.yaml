@@ -1,0 +1,187 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: keycloak-provisioning-job
+  namespace: keycloak
+  labels:
+    app: keycloak
+spec:
+  # How many times the job may be retried after a failure
+  backoffLimit: 4                         # (adjust to your needs)
+  # Run only one pod at a time – the same “single‑instance” semantics you had
+  parallelism: 1
+  completions: 1
+  # The pod that the job creates
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      # Jobs must have a restartPolicy of Never or OnFailure.
+      # “Never” matches the StatefulSet behaviour (the pod is not restarted
+      # automatically – the Job controller will create a new pod on failure).
+      restartPolicy: Never
+      terminationGracePeriodSeconds: 0    # copied from your StatefulSet
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.7.0
+          # Keep the same command / args you used in the StatefulSet
+          command: ["/bin/bash"]
+          args: ["/kc-startup-config.sh"]
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: "admin"
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kc-bootstrap-admin
+                  key: password
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+            - name: PROXY_ADDRESS_FORWARDING
+              value: "true"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HOSTNAME
+              value: "http://keycloak.localho.st:8080"
+            - name: KC_HOSTNAME_BACKCHANNEL_DYNAMIC
+              value: "true"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_CACHE
+              value: "ispn"
+            - name: KC_HTTP_PORT
+              value: "8080"
+            - name: KC_HTTP_HOST
+              value: "0.0.0.0"
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KC_CACHE_EMBEDDED_NETWORK_BIND_ADDRESS
+              value: "$(POD_IP)"
+            - name: KC_DB_URL_DATABASE
+              value: "keycloak"
+            - name: KC_DB_URL_HOST
+              value: "postgres"
+            - name: KC_DB
+              value: "postgres"
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kc-db
+                  key: password
+            - name: KC_DB_USERNAME
+              value: "keycloak"
+            # ----- setup‑script env vars (unchanged) -----
+            - name: SETUP_SCRIPT_EXAMPLE_REALM_NAME
+              value: "local"
+            - name: SETUP_SCRIPT_EXAMPLE_CLIENT_NAME
+              value: "demo_app"
+            - name: SETUP_SCRIPT_EXAMPLE_CLIENT_KCID
+              value: "demo_app_id"
+            - name: SETUP_SCRIPT_EXAMPLE_ROLE_NAME
+              value: "demo-role"
+            - name: SETUP_SCRIPT_EXAMPLE_CLIENT_ROLE_NAME
+              value: "demo-role-client"
+            - name: SETUP_SCRIPT_EXAMPLE_GROUP_NAME
+              value: "demo-group"
+            - name: SETUP_SCRIPT_EXAMPLE_GROUP_NAME_ADMINS
+              value: "demo-group-admins"
+            - name: SETUP_SCRIPT_EXAMPLE_GROUP_NAME_RO_USERS
+              value: "demo-group-ro-users"
+            - name: SETUP_SCRIPT_KAFKA_REALM_NAME
+              value: "kafka"
+            - name: SETUP_SCRIPT_KAFKA_BROKERS_KCID
+              value: "kafka-broker"
+            - name: SETUP_SCRIPT_KAFKA_BROKERS_CLIENTID
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-broker-client
+                  key: client-id
+            - name: SETUP_SCRIPT_KAFKA_BROKERS_CLIENTSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-broker-client
+                  key: client-secret
+            - name: SETUP_SCRIPT_KAFKA_TENANT_A_KCID
+              value: "kafka_tenant-a-id"
+            - name: SETUP_SCRIPT_KAFKA_TENANT_A_CLIENTID
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-tenant-a-client
+                  key: client-id
+            - name: SETUP_SCRIPT_KAFKA_TENANT_A_CLIENTSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-tenant-a-client
+                  key: client-secret
+            - name: SETUP_SCRIPT_KAFKA_TENANT_B_KCID
+              value: "kafka_tenant-b-id"
+            - name: SETUP_SCRIPT_KAFKA_TENANT_B_CLIENTID
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-tenant-b-client
+                  key: client-id
+            - name: SETUP_SCRIPT_KAFKA_TENANT_B_CLIENTSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-tenant-b-client
+                  key: client-secret
+            - name: SETUP_SCRIPT_KAFKA_TENANT_SCHEMA_REGISTRY_KCID
+              value: "schema-registry-id"
+            - name: SETUP_SCRIPT_KAFKA_TENANT_SCHEMA_REGISTRY_CLIENTID
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-schema-registry-client
+                  key: client-id
+            - name: SETUP_SCRIPT_KAFKA_TENANT_SCHEMA_REGISTRY_CLIENTSECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kafka-schema-registry-client
+                  key: client-secret
+          # ports:
+          #   - name: http
+          #     containerPort: 8080
+          #   - name: jgroups
+          #     containerPort: 7800
+          #   - name: jgroups-fd
+          #     containerPort: 57800
+          # # Probes are optional for a Job, but keeping them does no harm.
+          # startupProbe:
+          #   httpGet:
+          #     path: /health/started
+          #     port: 9000
+          #   periodSeconds: 1
+          #   failureThreshold: 600
+          # readinessProbe:
+          #   httpGet:
+          #     path: /health/ready
+          #     port: 9000
+          #   periodSeconds: 10
+          #   failureThreshold: 3
+          # livenessProbe:
+          #   httpGet:
+          #     path: /health/live
+          #     port: 9000
+          #   periodSeconds: 10
+          #   failureThreshold: 3
+          # No resource limits/requests – you can uncomment the block you already have
+          # resources:
+          #   limits:
+          #     cpu: "2"
+          #     memory: "2Gi"
+          #   requests:
+          #     cpu: "500m"
+          #     memory: "1.7Gi"
+          volumeMounts:
+            - name: vol-cm-startup-script-kc
+              mountPath: /kc-startup-config.sh
+              subPath: kc-startup-config.sh
+      volumes:
+        - name: vol-cm-startup-script-kc
+          configMap:
+            name: cm-keycloak-startup-script
+            defaultMode: 0777

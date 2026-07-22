@@ -1,0 +1,36 @@
+# kind create cluster --config kindCluster.yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: demo-cluster # kind get clusters | xargs -n 1 kind delete cluster --name
+# containerdConfigPatches:
+# - |-
+#   [plugins."io.containerd.grpc.v1.cri".registry]
+#     config_path = "/etc/containerd/certs.d"
+# networking:
+#   # This is the subnet used by the Docker bridge that Kind creates.
+#   # MetalLB will draw a pool from this range.
+#   podSubnet: "10.244.0.0/16"
+#   serviceSubnet: "10.96.0.0/12"
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      # ArgoCd
+      - containerPort: 30080 # Node port must be in the range 30000‑32767
+        hostPort: 30081
+        protocol: TCP
+        listenAddress: "0.0.0.0"
+      - containerPort: 443
+        hostPort: 30443
+        listenAddress: "0.0.0.0"
+        protocol: TCP
+      # Gateway
+      - containerPort: 31437 # Node port must be in the range 30000‑32767
+        hostPort: 8080
+        listenAddress: "0.0.0.0"
+        protocol: TCP
+      - containerPort: 30478 # Node port must be in the range 30000‑32767
+        hostPort: 8443
+        listenAddress: "0.0.0.0"
+        protocol: TCP
+  - role: worker
+  - role: worker

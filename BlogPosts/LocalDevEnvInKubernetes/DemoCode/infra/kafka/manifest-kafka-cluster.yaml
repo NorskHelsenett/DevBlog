@@ -1,0 +1,103 @@
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: our-kafka-cluster
+  namespace: kafka
+spec:
+  kafka:
+    config:
+      # Required for OAuth authentication and Keycloak authorization
+      principal.builder.class: io.strimzi.kafka.oauth.server.OAuthKafkaPrincipalBuilder
+      # Keycloak authorization properties
+      # Property Source: https://github.com/strimzi/strimzi-kafka-oauth/blob/main/oauth-keycloak-authorizer/src/main/java/io/strimzi/kafka/oauth/server/authorizer/KeycloakRBACAuthorizer.java
+      strimzi.authorization.delegate.to.kafka.acl: "true"
+      strimzi.authorization.client.id: kafka-broker
+      strimzi.authorization.token.endpoint.uri: http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/token
+      strimzi.authorization.grants.refresh.period.seconds: 60
+      strimzi.authorization.grants.refresh.pool.size: 5
+      strimzi.authorization.reuse.grants: true
+      strimzi.authorization.grants.max.idle.time.seconds: 300
+      strimzi.authorization.grants.gc.period.seconds: 300
+      strimzi.authorization.http.retries: 2
+      strimzi.authorization.connect.timeout.seconds: 10
+      strimzi.authorization.read.timeout.seconds: 15
+      strimzi.authorization.enable.metrics: true
+    listeners:
+      - name: plain
+        port: 9092
+        tls: true
+        type: internal
+      - name: tls
+        authentication:
+          type: tls
+        port: 9093
+        tls: true
+        type: internal
+      - name: oauth
+        port: 9094
+        tls: true
+        type: internal
+        authentication:
+          type: custom
+          sasl: true
+          listenerConfig:
+            connections.max.reauth.ms: 3600000
+            sasl.enabled.mechanisms: OAUTHBEARER
+            principal.builder.class: io.strimzi.kafka.oauth.server.OAuthKafkaPrincipalBuilder
+            oauthbearer.sasl.server.callback.handler.class: io.strimzi.kafka.oauth.server.JaasServerOauthValidatorCallbackHandler
+            oauthbearer.sasl.jaas.config: |
+              org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+                oauth.valid.issuer.uri="http://keycloak.localhost.nhn.no:8080/realms/kafka" \
+                oauth.jwks.endpoint.uri="http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/certs" \
+                oauth.client.id="kafka-broker" \
+                oauth.client.secret="${secrets:kafka/kafka-client:client-secret}" \
+                unsecuredLoginStringClaim_sub="unused" \
+                oauth.username.claim="preferred_username" \
+                oauth.check.issuer="true" \
+                oauth.check.audience="true" \
+                oauth.http.retries="2" \
+                oauth.http.retry.pause.millis="300" \
+                oauth.connect.timeout.seconds="10" \
+                oauth.read.timeout.seconds="15" \
+                oauth.jwks.refresh.seconds="300" \
+                oauth.jwks.expiry.seconds="360" \
+                oauth.enable.metrics="true" \
+                oauth.jwks.min.refresh.pause.seconds="1";
+    authorization:
+      type: custom
+      authorizerClass: io.strimzi.kafka.oauth.server.authorizer.KeycloakAuthorizer
+      superUsers:
+        - CN=our-superuser
+        - service-account-kafka-admin
+        - service-account-kafka-broker
+    logging:
+      type: inline
+      loggers:
+        logger.authorizer.level: DEBUG
+        logger.oauth.name: io.strimzi.kafka.oauth
+        logger.oauth.level: DEBUG
+  entityOperator:
+    # This needs to exist here for topic resources to be picked up and made available:
+    topicOperator: {}
+    # userOperator: {}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-kafka-cluster
+spec:
+  replicas: 3
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 1Gi
+        kraftMetadata: shared
+---

@@ -1,0 +1,168 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: schema-registry-storage-events
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-kafka-cluster
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    cleanup.policy: delete
+    retention.ms: -1
+    retention.bytes: -1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: schema-registry-storage-snapshots
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-kafka-cluster
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    cleanup.policy: delete
+    retention.ms: -1
+    retention.bytes: -1
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: schema-registry-storage-journal
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-kafka-cluster
+spec:
+  partitions: 3
+  replicas: 3
+  config:
+    cleanup.policy: delete
+    retention.ms: -1
+    retention.bytes: -1
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: schema-registry
+  namespace: kafka
+  labels:
+    app: schema-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: schema-registry
+  template:
+    metadata:
+      labels:
+        app: schema-registry
+    spec:
+      containers:
+        - name: apicurio-registry
+          image: apicurio/apicurio-registry:latest-release
+          ports:
+            - containerPort: 8080
+          env:
+            - name: QUARKUS_HTTP_INSECURE_REQUESTS
+              value: enabled
+
+            - name: APICURIO_STORAGE_KIND
+              value: kafkasql
+            # Kafka storage topics config
+            - name: APICURIO_KAFKASQL_TOPIC_AUTO-CREATE
+              value: "false"
+            # With the chosen oauth setup, these must be prefixed with the client id name (unless you chose to use the brokers client that gives access to everything)
+            - name: APICURIO_EVENTS_KAFKA_TOPIC
+              value: schema-registry-storage-events
+            - name: APICURIO_KAFKASQL_SNAPSHOTS_TOPIC
+              value: schema-registry-storage-snapshots
+            - name: APICURIO_KAFKASQL_TOPIC
+              value: schema-registry-storage-journal
+            - name: APICURIO_KAFKASQL_CONSUMER_GROUP_PREFIX
+              value: schema-registry-
+            # Kafka connection config
+            - name: APICURIO_KAFKASQL_BOOTSTRAP_SERVERS
+              value: our-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9094
+            # Kafka connection security config
+            - name: APICURIO_KAFKA_COMMON_SSL_TRUSTSTORE_TYPE
+              value: PKCS12
+            - name: APICURIO_KAFKA_COMMON_SSL_TRUSTSTORE_LOCATION
+              value: /certs/truststore.p12
+              # value: /etc/our-kafka-cluster-cluster-ca-cert-volume/ca.p12
+            - name: APICURIO_KAFKA_COMMON_SSL_TRUSTSTORE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: ca.password
+                  name: our-kafka-cluster-cluster-ca-cert
+            - name: APICURIO_KAFKASQL_SECURITY_SASL_ENABLED
+              value: "true"
+            - name: APICURIO_KAFKASQL_SECURITY_SASL_MECHANISM
+              value: OAUTHBEARER
+            - name: APICURIO_KAFKASQL_SECURITY_SASL_CLIENT_ID
+              # value: schema-registry
+              valueFrom:
+                secretKeyRef:
+                  key: client-id
+                  name: kafka-broker-client
+                  # name: kafka-schema-registry-client
+            - name: APICURIO_KAFKASQL_SECURITY_SASL_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: client-secret
+                  name: kafka-broker-client
+                  # name: kafka-schema-registry-client
+            - name: APICURIO_KAFKASQL_SECURITY_SASL_TOKEN_ENDPOINT
+              value: http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/token
+            - name: APICURIO_KAFKASQL_SECURITY_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+              value: io.strimzi.kafka.oauth.client.JaasClientOauthLoginCallbackHandler
+            - name: APICURIO_KAFKA_COMMON_SECURITY_PROTOCOL
+              value: SASL_SSL
+            # Kafka connection security config end
+            # Kafka connection config end
+          resources: {}
+          volumeMounts:
+          - mountPath: /certs/truststore.p12
+            name: cluster-cert
+            subPath: ca.p12
+      volumes:
+      - name: cluster-cert
+        secret:
+          defaultMode: 420
+          secretName: our-kafka-cluster-cluster-ca-cert
+---
+# 3. APICURIO REGISTRY SERVICE
+apiVersion: v1
+kind: Service
+metadata:
+  name: svc-schema-registry
+  namespace: kafka
+spec:
+  ports:
+    - port: 8080
+      targetPort: 8080
+  selector:
+    app: schema-registry
+  type: ClusterIP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: hr-schema-registry
+  namespace: kafka
+spec:
+  parentRefs:
+  - name: ourgateway
+    namespace: networking-gateway
+    kind: Gateway
+  hostnames:
+  - schema-registry.localhost.nhn.no
+  - schema-registry.localho.st
+  rules:
+  - backendRefs:
+    - name: svc-schema-registry
+      port: 8080
+# curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" -d '{"schema":"{\"$schema\":\"http://json-schema.org/draft-07/schema#\",\"type\":\"object\",\"properties\":{\"sid\":{\"type\":\"string\"}},\"required\":[\"sid\"],\"additionalProperties\":false}","schemaType":"JSON"}' http://schema-registry.localhost.nhn.no:8080/apis/ccompat/v7/subjects/testschema/versions
+# curl http://schema-registry.localhost.nhn.no:8080/apis/ccompat/v7/subjects/testschema/versions/1

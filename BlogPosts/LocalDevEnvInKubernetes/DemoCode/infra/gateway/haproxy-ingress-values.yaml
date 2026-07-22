@@ -1,0 +1,18 @@
+# Expose HAProxy via host port on all cluster nodes
+controller:
+  ingressClassResource:
+    enabled: true
+  kind: DaemonSet
+  daemonset:
+    useHostPort: true
+  service:
+    type: NodePort
+    externalTrafficPolicy: Cluster
+    httpPorts:
+      - port: 80
+        targetPort: http
+        nodePort: 31437
+    httpsPorts:
+      - port: 443
+        targetPort: https
+        nodePort: 30478
