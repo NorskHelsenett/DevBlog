@@ -1,0 +1,55 @@
+env:
+- name: DYNAMIC_CONFIG_ENABLED
+  value: 'true'
+- name: DYNAMIC_CONFIG_PATH
+  value: "/our-cluster/dynamic-configs/dynamic_config.yaml" # Default is /etc/kafkaui/dynamic_config.yaml
+- name: KAFKA_CLUSTERS_0_NAME
+  value: "localcluster"
+- name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+  value: "our-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9094"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION
+  value: "/certs/truststore.p12"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_TYPE
+  value: "PKCS12"
+- name: KAFKA_CLUSTERS_0_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM
+  value: ""
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
+  value: "SASL_SSL"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_MECHANISM
+  value: "OAUTHBEARER"
+# - name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG
+#   value: org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required clientId=<CLIENT_ID> scope='openid' clientSecret=<CLIENT_SECRET>;
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
+  value: "http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/token"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SASL_LOGIN_CALLBACK_HANDLER_CLASS
+  value: "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_PROTOCOL
+  value: "SASL"
+- name: KAFKA_CLUSTER_0_SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS
+  value: "30000"
+- name: KAFKA_CLUSTER_0_SOCKET_CONNECTION_SETUP_TIMEOUT_MS
+  value: "30000"
+- name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
+  value: "http://svc-schema-registry.kafka.svc.cluster.local:8080/apis/ccompat/v7"
+envs:
+  secretMappings:
+    KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD:
+      name: our-kafka-cluster-cluster-ca-cert
+      keyName: ca.password
+    KAFKA_CLUSTERS_0_PROPERTIES_SASL_JAAS_CONFIG:
+      name: kafbat-ui-sals-jaas-connection-config-secret
+      keyName: sasl-jaas-config
+
+volumeMounts:
+- mountPath: /certs/truststore.p12
+  name: cluster-cert
+  subPath: ca.p12
+- name: dynamic-configs
+  mountPath: /our-cluster/dynamic-configs
+volumes:
+- name: cluster-cert
+  secret:
+    defaultMode: 420
+    secretName: our-kafka-cluster-cluster-ca-cert
+- name: dynamic-configs
+  emptyDir: {}
