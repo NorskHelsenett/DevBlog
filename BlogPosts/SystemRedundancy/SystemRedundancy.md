@@ -12,7 +12,7 @@ Next, there are many reasons to take the next step on the ladder of redundancy, 
 
 ![Figure 2](./Illustrations/SR-02-Basic-redundancy.svg)
 
-It's a neat model, allows for nice things rolling upgrades without downtime, without being very hard to implement. And as 1 can go down withouth downtime, we have proper redundancy!
+It's a neat model, allows for nice things rolling upgrades without downtime, without being very hard to implement. And as 1 can go down without downtime, we have proper redundancy!
 
 Except, now we have an issue if our location goes down. The easy way to work around this is to take our now multi-instance capable frontend, and run another instance form another place like this:
 
@@ -38,17 +38,17 @@ But, as we saw with the situation above, we can remedy the situation by adding a
 
 At this point questions arise. What is the dottet arrow between the two Kafka-thingies at each location? We know about throwing in software to sync database servers, but how could this be done? Wouldn't it be terribly complicated?
 
-Clever transition, not that hard, looks pretty in practice:
+Certainly, it might look a bit complicated at the surface:
 
 ![Figure 7](./Illustrations/SR-07-Elaborated-geo-redundancy-with-Kafka-and-autonomous-sites.svg)
 
-Reassure reader, is quite simple actually. Also scales awesomely to more than 1 locations. Sure, there is consistency across locations to now consider, but as you're at more than 1 place you have to pay this price anyways.
-
-But what about more magic, an easier life? Not so many topics. Solution:
+But it is quite simple actually. None of the components really have to do anything too complicated. Most of the components, like the state synchronization components are just copies of each other, and can be really simple internally.
+It also scales awesomely to more than 2 locations. Sure, there is consistency across locations you now have to deal with being eventual, instead of instant when the single database moved the global clock and held the locks. But when you're present at more than 1 place you have to pay this price anyways.
+But what about more magic, an easier life? Not so many topics? Wouldn't it be nice to do something like this:
 
 ![Figure 8](./Illustrations/SR-08-Abstracted-geo-redundancy-with-Kafka-and-autonomous-sites.svg)
 
-Yes, can do like this without really changing the main application code too much, or even at all. However, here be dragons.
+Yes, can do this without really changing the main application code too much, or even at all. The built in Kafka mirror maker 2 also makes it not too difficult. However, here be dragons.
 
 First off, the sync now has to do clever anti-looping shenanigans. Sure, you can use headers on Kafka messages to facilitate this, but it still compounds on your business flow.
 
