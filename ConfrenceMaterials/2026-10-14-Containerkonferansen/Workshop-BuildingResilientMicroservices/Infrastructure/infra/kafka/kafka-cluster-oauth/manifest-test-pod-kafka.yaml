@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-cli
+  namespace: kafka
+  labels:
+    app: kafka-cli
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-cli
+  template:
+    metadata:
+      labels:
+        app: kafka-cli
+    spec:
+      # Ideally more in prod, however nothing to wait for locally
+      terminationGracePeriodSeconds: 0
+      containers:
+        - name: kafka
+          env:
+          - name: KAFKA_OPTS
+            value: -Dorg.apache.kafka.sasl.oauthbearer.allowed.urls=http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/token
+          - name: TRUSTSTORE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                key: ca.password
+                name: our-kafka-cluster-cluster-ca-cert
+          - name: 'KAFKA_CLIENT_CLIENTID'
+            value: 'kafka-tenant-a'
+          - name: 'KAFKA_CLIENT_SECRET'
+            valueFrom:
+              secretKeyRef:
+                name: kafka-client
+                key: client-secret
+          - name: 'TOKEN_URL'
+            value: 'http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/token'
+          - name: 'BROKERS_BOOTSTRAP_ADDRESS'
+            value: 'our-kafka-cluster-kafka-bootstrap:9094'
+          image: quay.io/strimzi/kafka:0.49.0-kafka-4.1.1
+          # image: quay.io/strimzi/kafka:latest
+          command:
+            - tail
+            - -f
+            - /dev/null
+          resources: {}
+            # requests:
+            #   memory: "256Mi"
+            #   cpu: "100m"
+            # limits:
+            #   memory: "512Mi"
+            #   cpu: "500m"
+          volumeMounts:
+          - mountPath: /certs/truststore.p12
+            name: cluster-cert
+            subPath: ca.p12
+      volumes:
+      - name: cluster-cert
+        secret:
+          defaultMode: 420
+          secretName: our-kafka-cluster-cluster-ca-cert

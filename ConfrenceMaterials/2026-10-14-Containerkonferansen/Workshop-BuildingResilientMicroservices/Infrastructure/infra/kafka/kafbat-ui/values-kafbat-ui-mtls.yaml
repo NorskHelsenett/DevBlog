@@ -1,0 +1,205 @@
+env:
+- name: DYNAMIC_CONFIG_ENABLED
+  value: 'true'
+- name: DYNAMIC_CONFIG_PATH
+  value: "/our-cluster/dynamic-configs/dynamic_config.yaml"
+- name: USER_AUTH_OAUTH_CLIENT_ID
+  value: "kafka-ui"
+- name: USER_AUTH_OAUTH_CLIENT_SECRET
+  value: "todo-set-up-with-eso-and-retrieve-with-kubectl-here"
+
+- name: KAFKA_CLUSTERS_0_NAME
+  value: "KcMtlsCluster"
+- name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
+  value: "our-mtls-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9093"
+- name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
+  value: "http://schema-registry-app-service.kafka.svc.cluster.local:8080/apis/ccompat/v7"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
+  value: "SSL"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_TYPE
+  value: "PEM"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION
+  # value: "/certs/user/ca.crt"
+  value: "/certs/cluster-trustbundle/cluster-ca.crt"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE
+  value: "PKCS12"
+- name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION
+  value: "/certs/user/user.p12"
+# - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD
+#   value: ""
+# - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD
+#   value: "kafka_ui_demo_cert_password"
+# - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEY_PASSWORD
+#   value: "kafka_ui_demo_cert_password"
+- name: KAFKA_CLUSTERS_0_AUDIT_TOPICAUDITENABLED
+  value: "true"
+- name: KAFKA_CLUSTERS_0_AUDIT_CONSOLEAUDITENABLED
+  value: "true"
+- name: KAFKA_CLUSTERS_0_AUDIT_TOPIC
+  value: "__kui-audit-log"
+- name: KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_MS
+  value: "-1" # Time-wise, retain logs forever
+- name: KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICPROPERTIES_RETENTION_BYTES
+  value: "1048576" # Only keep 1MiB of logs locally
+- name: KAFKA_CLUSTERS_0_AUDIT_AUDITTOPICSPARTITIONS
+  value: "1"
+- name: KAFKA_CLUSTERS_0_AUDIT_LEVEL
+  value: "all"
+envs:
+  secretMappings:
+    # KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD:
+    #   name: our-mtls-kafka-cluster-cluster-ca-cert
+    #   keyName: ca.password
+    CLIENT_KEY_STORE_PASSWORD:
+      name: our-superuser
+      keyName: user.password
+    KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD:
+      name: our-superuser
+      keyName: user.password
+    # KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEY_PASSWORD:
+    #   name: our-superuser
+    #   keyName: user.password
+    # CLUSTER_AUTH_OAUTH_CLIENT_ID:
+    #   name: kafka-kafbat-ui-client
+    #   keyName: client-id
+    # CLUSTER_AUTH_OAUTH_CLIENT_SECRET:
+    #   name: kafka-kafbat-ui-client
+    #   keyName: client-secret
+    # USER_AUTH_OAUTH_CLIENT_ID:
+    #   name: kafbat-ui-kafka-client
+    #   keyName: client-id
+    # USER_AUTH_OAUTH_CLIENT_SECRET:
+    #   name: kafbat-ui-kafka-client
+    #   keyName: client-secret
+
+volumeMounts:
+# - mountPath: /certs/ca.crt
+#   name: client-certs
+#   subPath: ca.crt
+# - mountPath: /certs/user.p12
+#   name: client-certs
+#   subPath: user.p12
+- mountPath: /certs/user/
+  name: client-certs
+- mountPath: /certs/cluster-trustbundle/
+  name: cluster-trustbundle
+- name: dynamic-configs
+  mountPath: /our-cluster/dynamic-configs
+volumes:
+- name: cluster-trustbundle
+  secret:
+    defaultMode: 420
+    secretName: our-mtls-kafka-cluster-trustbundle
+- name: client-certs
+  secret:
+    defaultMode: 420
+    secretName: our-superuser
+- name: dynamic-configs
+  emptyDir: {}
+
+yamlApplicationConfig:
+  # kafka:
+  #   clusters:
+  #   - name: KcMtlsCluster
+  #     bootstrapServers: our-mtls-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9094
+  #     properties:
+  #       protocol: "SSL"
+  #       security.protocol: "SSL"
+  #     schemaRegistry: http://svc-schema-registry.kafka.svc.cluster.local:8080/apis/ccompat/v7
+  #     schemaRegistryTopicSubjectSuffix: -value
+  #     # ssl:
+  #     #   truststore-location: "/certs/ca.crt"
+  #     #   truststore-password: "${CLUSTER_TRUST_STORE_PASSWORD}"  # Password to access the truststore
+  #     #   truststore-type: "PEM"
+  #     #   truststore:
+  #     #     type: "PEM"
+  #     #     location: "/certs/ca.crt"
+  #     #   keystore:
+  #     #     type: "PKCS12"
+  #     #     location: "/certs/user.p12"
+  #     #     password: "${CLIENT_KEY_STORE_PASSWORD}"  # Password to access the truststore
+  #     #   keystore-location: "/certs/user.p12"
+  #     #   # keystore-password: "${CLIENT_KEY_STORE_PASSWORD}"  # Password to access the truststore
+  #     #   keystore-type: "PKCS12"
+
+  # DISABLED_auth:
+  auth:
+    type: OAUTH2
+    oauth2:
+      client:
+        keycloak:
+          clientId: "${USER_AUTH_OAUTH_CLIENT_ID}"
+          clientSecret: "${USER_AUTH_OAUTH_CLIENT_SECRET}"
+          # clientId: "kafka-ui"
+          # clientId: "${CLUSTER_AUTH_OAUTH_CLIENT_ID}"
+          # clientSecret: "${CLUSTER_AUTH_OAUTH_CLIENT_SECRET}"
+          scope: openid
+          # issuer-uri: http://keycloak.localho.st:8080/auth/realms/kafka
+          issuer-uri: http://keycloak.localho.st:8080/realms/kafka-ui
+          user-name-attribute: preferred_username
+          client-name: keycloak
+          provider: keycloak
+          custom-params:
+            type: oauth
+            roles-field: groups
+  # DISABLED_rbac:
+  rbac:
+    roles:
+    - name: "admins"
+      clusters:
+      - KcMtlsCluster
+      subjects:
+      - provider: oauth
+        type: role
+        value: "kui-admins"
+      # - provider: oauth
+      #   type: user
+      #   value: "simon"
+      permissions:
+      - resource: applicationconfig
+        actions: all
+      - resource: clusterconfig
+        actions: all
+      - resource: topic
+        value: ".*"
+        actions: all
+      - resource: consumer
+        value: ".*"
+        actions: all
+      - resource: schema
+        value: ".*"
+        actions: all
+      - resource: connect
+        value: ".*"
+        actions: all
+      - resource: ksql
+        actions: all
+      - resource: acl
+        actions: all
+    - name: "readonly"
+      clusters:
+      - KcMtlsCluster
+      subjects:
+      - provider: oauth
+        type: role
+        value: "kui-ro"
+      permissions:
+      - resource: clusterconfig
+        actions: [ "view" ]
+      - resource: topic
+        value: ".*"
+        actions:
+          - VIEW
+          - MESSAGES_READ
+          - ANALYSIS_VIEW
+      - resource: consumer
+        value: ".*"
+        actions: [ view ]
+      - resource: schema
+        value: ".*"
+        actions: [ view ]
+      - resource: connect
+        value: ".*"
+        actions: [ view ]
+      - resource: acl
+        actions: [ view ]

@@ -1,0 +1,36 @@
+{
+    "namespace": "no.nhn.examples.serialization.avro",
+    "name": "Person",
+    "type": "record",
+    "fields": [
+        {
+            "name": "Id",
+            "type": "string"
+        },
+        {
+            "name": "Name",
+            "type": {
+                "name": "PersonName",
+                "type": "record",
+                "fields": [
+                    {
+                        "name": "Given",
+                        "type": "string"
+                    },
+                    {
+                        "name": "Family",
+                        "type": "string"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "Tags",
+            "type":{
+                "type": "array",
+                "items": "string",
+                "default": []
+            }
+        }
+    ]
+}

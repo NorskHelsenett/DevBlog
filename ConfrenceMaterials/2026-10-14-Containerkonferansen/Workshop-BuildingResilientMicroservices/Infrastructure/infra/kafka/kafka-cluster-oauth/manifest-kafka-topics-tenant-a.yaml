@@ -1,0 +1,27 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: kafka-tenant-a-testtopic
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-kafka-cluster
+spec:
+  partitions: 3
+  # replicas: 2
+  config:
+    cleanup.policy: compact
+    segment.bytes: 100000000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: not-owned-by-or-accessible-to-anyone
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-kafka-cluster
+spec:
+  partitions: 3
+  # replicas: 2
+  config:
+    cleanup.policy: compact
+    segment.bytes: 100000000

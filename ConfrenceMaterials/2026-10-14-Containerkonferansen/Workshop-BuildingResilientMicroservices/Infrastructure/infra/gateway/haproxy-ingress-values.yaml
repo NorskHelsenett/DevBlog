@@ -1,0 +1,21 @@
+# Expose HAProxy via host port on all cluster nodes
+controller:
+  ingressClassResource:
+    enabled: true
+  kind: DaemonSet
+  daemonset:
+    useHostPort: true
+  config:
+    # Tell HAProxy to keep TLS untouched (required for mTLS)
+    ssl-passthrough: "true"
+  service:
+    type: NodePort
+    externalTrafficPolicy: Cluster
+    httpPorts:
+      - port: 80
+        targetPort: http
+        nodePort: 31437
+    httpsPorts:
+      - port: 443
+        targetPort: https
+        nodePort: 30478

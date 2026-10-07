@@ -1,0 +1,77 @@
+# If setup with compose, you can run to use kubectl outside after:
+# kind export kubeconfig --name demo-cluster
+services:
+  workshop:
+    build:
+      context: .
+      dockerfile_inline: |
+        FROM docker:cli
+        RUN apk update
+        RUN apk add --no-cache \
+                bash \
+                ca-certificates \
+                curl \
+                git \
+                helm \
+                jq \
+                yq \
+                tar \
+                go \
+                gzip \
+                kubectl \
+                openssl \
+                sed \
+                gawk \
+                bash-completion \
+                gettext \
+                libc6-compat \
+                && update-ca-certificates
+
+        ENV GOROOT /usr/lib/go
+        ENV GOPATH /go
+        ENV PATH /go/bin:$PATH
+
+        # RUN mkdir -p ${GOPATH}/src ${GOPATH}/bin
+
+        RUN go install sigs.k8s.io/kind@latest
+
+        # ARG USER_ID=1000
+        # ARG GROUP_ID=1000
+        # RUN addgroup -g 20 workshop && \
+        #     adduser -D -u 20 -G workshop -s /bin/bash workshop
+        # RUN adduser -D -u 501 -G docker workshop
+        # RUN addgroup -g 20 docker && adduser -D -u 501 -G docker workshop
+        # USER workshop
+
+        WORKDIR /work
+
+        ENTRYPOINT ["/bin/bash"]
+    image: localhost/kind-cluster-script-runner:latest
+    container_name: kind-cluster-script-setup-runner
+    # command: ["./setup.sh"]
+    environment:
+      HOST_UID: "${HOST_UID}"
+      HOST_GID: "${HOST_GID}"
+    entrypoint:
+      - '/bin/bash'
+      - '-c'
+      - |
+        echo "$(ip route get 1.1.1.1 | awk '{print $NF; exit}') keycloak.localho.st" >> /etc/hosts
+
+        ./setup.sh
+
+        # Ensure extracted credentials for use directly from host are not owned by root and inaccessible to user:
+        chown -R 777 /work/credentials
+
+        # Leave container running, so that people without kind or kubectl can exec into it and use them from there:
+        echo "Waiting forever, so that you have shell"
+        tail -f /dev/null
+    # user: "501:20"
+    network_mode: host
+    volumes:
+      - .:/work
+      - /var/run/docker.sock:/var/run/docker.sock
+    stdin_open: true   # `docker compose run` gets a TTY
+    tty: true
+    # ports:
+    #   - "2375:2375"

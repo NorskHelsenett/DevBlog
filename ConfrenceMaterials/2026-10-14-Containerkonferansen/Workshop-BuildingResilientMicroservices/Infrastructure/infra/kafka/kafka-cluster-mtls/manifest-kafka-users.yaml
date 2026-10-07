@@ -1,0 +1,86 @@
+# apiVersion: kafka.strimzi.io/v1
+# kind: KafkaUser
+# metadata:
+#   name: our-superuser
+#   namespace: kafka
+#   labels:
+#     strimzi.io/cluster: our-mtls-kafka-cluster
+# spec:
+#   # mTLS authentication - generates client certificates
+#   authentication:
+#     type: tls
+#     validityDays: 360
+#     renewalDays: 30
+#   # ACL authorization for the client
+#   # authorization:
+#   #   type: simple
+#   #   acls:
+#   #     # Allow consumer group operations
+#   #     - resource:
+#   #         type: group
+#   #         name: "*"
+#   #         patternType: literal
+#   #       operations:
+#   #         - ALL
+#   #       host: "*"
+#   #     # Allow reading from topics
+#   #     - resource:
+#   #         type: topic
+#   #         name: "*"
+#   #         patternType: literal
+#   #       operations:
+#   #         - ALL
+#   #       host: "*"
+#   #     # Allow writing to topics
+#   #     - resource:
+#   #         type: topic
+#   #         name: "*"
+#   #         patternType: literal
+#   #       operations:
+#   #         - ALL
+#   #       host: "*"
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaUser
+metadata:
+  name: tenant-a
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: our-mtls-kafka-cluster
+spec:
+  # mTLS authentication - generates client certificates
+  authentication:
+    type: tls
+    validityDays: 360
+    renewalDays: 30
+  # ACL authorization for the client
+  authorization:
+    type: simple
+    acls:
+      # Allow consumer group operations
+      - resource:
+          type: group
+          name: tenant-a-group
+          patternType: literal
+        operations:
+          - Read
+        host: "*"
+      # Allow reading from topics
+      - resource:
+          type: topic
+          name: "tenant-a-*"
+          patternType: literal
+        operations:
+          - Read
+          - Describe
+        host: "*"
+      # Allow writing to topics
+      - resource:
+          type: topic
+          name: "tenant-a-*"
+          patternType: literal
+        operations:
+          - Write
+          - Create
+          - Describe
+        host: "*"

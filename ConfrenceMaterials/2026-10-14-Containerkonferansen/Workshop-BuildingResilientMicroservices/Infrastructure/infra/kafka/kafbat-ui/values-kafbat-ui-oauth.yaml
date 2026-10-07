@@ -1,0 +1,150 @@
+env:
+- name: DYNAMIC_CONFIG_ENABLED
+  value: 'true'
+- name: DYNAMIC_CONFIG_PATH
+  value: "/our-cluster/dynamic-configs/dynamic_config.yaml"
+- name: USER_AUTH_OAUTH_CLIENT_ID
+  value: "kafka-ui"
+- name: USER_AUTH_OAUTH_CLIENT_SECRET
+  value: "todo-set-up-with-eso-and-retrieve-with-kubectl-here"
+envs:
+  secretMappings:
+    CLUSTER_TRUST_STORE_PASSWORD:
+      name: our-kafka-cluster-cluster-ca-cert
+      keyName: ca.password
+    CLUSTER_AUTH_OAUTH_CLIENT_ID:
+      name: kafka-kafbat-ui-client
+      keyName: client-id
+    CLUSTER_AUTH_OAUTH_CLIENT_SECRET:
+      name: kafka-kafbat-ui-client
+      keyName: client-secret
+    # USER_AUTH_OAUTH_CLIENT_ID:
+    #   name: kafbat-ui-kafka-client
+    #   keyName: client-id
+    # USER_AUTH_OAUTH_CLIENT_SECRET:
+    #   name: kafbat-ui-kafka-client
+    #   keyName: client-secret
+
+volumeMounts:
+- mountPath: /certs/truststore.p12
+  name: cluster-cert
+  subPath: ca.p12
+- name: dynamic-configs
+  mountPath: /our-cluster/dynamic-configs
+volumes:
+- name: cluster-cert
+  secret:
+    defaultMode: 420
+    secretName: our-kafka-cluster-cluster-ca-cert
+- name: dynamic-configs
+  emptyDir: {}
+
+yamlApplicationConfig:
+  kafka:
+    clusters:
+    - name: KcOauthCluster
+      bootstrapServers: our-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9094
+      properties:
+        protocol: "SASL"
+        sasl:
+          mechanism: "OAUTHBEARER"
+          login.callback.handler.class: "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler"
+          oauthbearer.token.endpoint.url: http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/token
+          # oauthbearer.token.endpoint.url: http://keycloak.localho.st:8080/realms/kafka/protocol/openid-connect/token
+          jaas.config: >
+            org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule
+            required
+            oauth.valid.issuer.uri="http://keycloak.localho.st:8080/realms/kafka"
+            oauth.jwks.endpoint.uri="http://keycloak.keycloak.svc.cluster.local:8080/realms/kafka/protocol/openid-connect/certs"
+            clientId="${CLUSTER_AUTH_OAUTH_CLIENT_ID}"
+            scope="openid"
+            clientSecret="${CLUSTER_AUTH_OAUTH_CLIENT_SECRET}"
+            ;
+        security.protocol: "SASL_SSL"
+      schemaRegistry: http://svc-schema-registry.kafka.svc.cluster.local:8080/apis/ccompat/v7
+      schemaRegistryTopicSubjectSuffix: -value
+      ssl:
+        truststore-location: "/certs/truststore.p12"
+        truststore-password: "${CLUSTER_TRUST_STORE_PASSWORD}"  # Password to access the truststore
+        truststore-type: "PKCS12"
+  # DISABLED_auth:
+  auth:
+    type: OAUTH2
+    oauth2:
+      client:
+        keycloak:
+          clientId: "${USER_AUTH_OAUTH_CLIENT_ID}"
+          clientSecret: "${USER_AUTH_OAUTH_CLIENT_SECRET}"
+          # clientId: "kafka-ui"
+          # clientId: "${CLUSTER_AUTH_OAUTH_CLIENT_ID}"
+          # clientSecret: "${CLUSTER_AUTH_OAUTH_CLIENT_SECRET}"
+          scope: openid
+          # issuer-uri: http://keycloak.localho.st:8080/auth/realms/kafka
+          issuer-uri: http://keycloak.localho.st:8080/realms/kafka-ui
+          user-name-attribute: preferred_username
+          client-name: keycloak
+          provider: keycloak
+          custom-params:
+            type: oauth
+            roles-field: groups
+  # DISABLED_rbac:
+  rbac:
+    roles:
+    - name: "admins"
+      clusters:
+      - KcOauthCluster
+      subjects:
+      - provider: oauth
+        type: role
+        value: "kui-admins"
+      # - provider: oauth
+      #   type: user
+      #   value: "simon"
+      permissions:
+      - resource: applicationconfig
+        actions: all
+      - resource: clusterconfig
+        actions: all
+      - resource: topic
+        value: ".*"
+        actions: all
+      - resource: consumer
+        value: ".*"
+        actions: all
+      - resource: schema
+        value: ".*"
+        actions: all
+      - resource: connect
+        value: ".*"
+        actions: all
+      - resource: ksql
+        actions: all
+      - resource: acl
+        actions: all
+    - name: "readonly"
+      clusters:
+      - KcOauthCluster
+      subjects:
+      - provider: oauth
+        type: role
+        value: "kui-ro"
+      permissions:
+      - resource: clusterconfig
+        actions: [ "view" ]
+      - resource: topic
+        value: ".*"
+        actions:
+          - VIEW
+          - MESSAGES_READ
+          - ANALYSIS_VIEW
+      - resource: consumer
+        value: ".*"
+        actions: [ view ]
+      - resource: schema
+        value: ".*"
+        actions: [ view ]
+      - resource: connect
+        value: ".*"
+        actions: [ view ]
+      - resource: acl
+        actions: [ view ]

@@ -1,0 +1,14 @@
+syntax = "proto3";
+package no.nhn.kafka.examples.person;
+option csharp_namespace = "";
+
+message PersonName{
+    string Given = 1;
+    string Family = 2;
+}
+
+message Person {
+    string Id = 1;
+    PersonName Name = 2;
+    repeated string Tags = 3;
+}
