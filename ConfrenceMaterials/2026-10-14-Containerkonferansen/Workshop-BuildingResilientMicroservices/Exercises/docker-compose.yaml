@@ -1,0 +1,58 @@
+# networks:
+#   apps_network:
+#     name: apps_network
+#     external: true
+
+services:
+  state-distributor:
+    image: localhost/state-distributor
+    container_name: state-distributor
+    build:
+      context: ./FullyWorkingExample
+      # context: ./Exercise1-ReceiveAndProduce
+      # context: ./Exercise2-ConsumeAndMakeAvailable
+      # context: ./Exercise3-ResumeWhenRestarted
+      dockerfile: Dockerfile
+    user: 1000:1001
+    network_mode: "host"
+    # networks:
+    #   - apps_network
+    ports:
+      - "4321:4321"
+    volumes:
+      - ../Infrastructure/credentials/kafka:/kafka/secrets
+      # - ../../ContainerData:/ContainerData
+    tmpfs:
+      - /ContainerData
+    environment:
+      DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:4321"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      # kafkal config
+      KAFKA_BOOTSTRAP_SERVERS: "127.0.0.1:9094"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/cluster-ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/user.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/user.key"
+      # KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/user.password"
+      KAFKA_ACKS: "all"
+      KAFKA_GROUP_ID: "state-distributor"
+      KAFKA_ENABLE_AUTO_OFFSET_STORE: "true"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry.localho.st:8080/apis/ccompat/v7"
+
+      # State distributor config
+      STATE_DISTRIBUTOR_KAFKA_STATE_TOPIC: "persons-protobuf"
+    healthcheck:
+      # Can be commented out to use the check embedded in the image. However, due to how compose works, checking for if we are ready is what we want
+      test: [ "CMD", "dotnet", "/HealthChecker/HealthChecker.dll", "--", "http://localhost:8080/healthz/ready" ]
+      start_period: "8s"
+      interval: "60s"
+      timeout: "1s"
+      retries: 20

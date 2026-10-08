@@ -1,0 +1,56 @@
+@baseurl=http://localhost:4321
+
+###
+# Check if we're up, running, and healthy
+
+GET {{baseurl}}/healthz/ready
+
+###
+
+GET {{baseurl}}/healthz/live
+
+###
+
+GET {{baseurl}}/healthz
+
+###
+# Add data that gets published on kafka
+
+POST {{baseurl}}/store
+Content-Type: application/json
+X-Correlation-Id: {{$guid}}
+
+{
+    "Id": "0x5f3759df",
+    "Name": {
+        "Given": "*",
+        "Family": "+"
+    },
+    "Tags": [
+        "Anything goes here?",
+        "{{$datetime iso8601}}",
+        "a number: {{$randomInt 0 10}}"
+    ]
+}
+
+###
+# Retrieve event consumed from kafka
+
+POST {{baseurl}}/retrieve
+Content-Type: application/json
+
+{
+    "Id": "0x5f3759df"
+}
+
+###
+
+# Remove event from kafka and storage downstream
+POST {{baseurl}}/remove
+Content-Type: application/json
+
+{
+    "Id": "0x5f3759df"
+}
+
+###
