@@ -25,7 +25,8 @@ services:
     tmpfs:
       - /ContainerData
     environment:
-      DOTNET_SYSTEM_NET_DISABLEIPV6: "1"
+      DOTNET_SYSTEM_NET_DISABLEIPV6: "1" # Macos docker don't take kindly to talking ipv6 from the outside
+
       ASPNETCORE_ENVIRONMENT: "Development"
       ASPNETCORE_URLS: "http://+:4321"
 
