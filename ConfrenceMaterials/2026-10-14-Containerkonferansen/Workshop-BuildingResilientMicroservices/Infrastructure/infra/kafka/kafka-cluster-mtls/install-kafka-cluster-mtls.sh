@@ -22,4 +22,8 @@ done
 echo "🏗️ Deploying Kafka cluster"
 kubectl apply -f "$SCRIPT_DIR/manifest-kafka-cluster.yaml" -n "${KAFKA_NS}" 1>/dev/null
 echo "⏳ Waiting for Kafka cluster to be ready"
-kubectl wait kafka.kafka.strimzi.io/our-mtls-kafka-cluster --for=condition=Ready --timeout=300s -n "${KAFKA_NS}"
+kubectl wait kafka.kafka.strimzi.io/ws-kafka-cluster-mtls --for=condition=Ready --timeout=300s -n "${KAFKA_NS}"
+echo "📚 Adding Kafka topics"
+kubectl apply -f "$SCRIPT_DIR/manifest-kafka-topics.yaml" -n "${KAFKA_NS}" 1>/dev/null
+echo "👥 Adding Kafka users"
+kubectl apply -f "$SCRIPT_DIR/manifest-kafka-users.yaml" -n "${KAFKA_NS}" 1>/dev/null

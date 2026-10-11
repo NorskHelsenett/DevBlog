@@ -56,7 +56,33 @@ echo "⏳ Waiting for schema registry UI to be ready"
 
 # kubectl -n "${KAFKA_NS}" wait --for=condition=available deployments/schema-registry --timeout=20s 1>/dev/null
 kubectl -n "${KAFKA_NS}" wait --for=condition=available deployments/schema-registry-app-deployment --timeout=20s 1>/dev/null
+kubectl -n "${KAFKA_NS}" rollout status deployment/schema-registry-app-deployment --timeout=2m
+
+
+TIMEOUTSECONDS=60
+start=$(date +%s)
+end=$(( start + TIMEOUT ))
+while :   # “:” is the POSIX no‑op command, equivalent to “while true”
+do
+    # Does the resource already exist?
+    if curl -fsS "http://schema-registry.localho.st:8080/apis/ccompat/v7/subjects" | jq . >/dev/null 2>&1; then
+        printf '\r\e[K✅ Schema registry is ready to receive input\n'
+        exit 0
+    fi
+
+    now=$(date +%s)
+    if [ "$now" -ge "$end" ]; then
+        printf '\r\e[K❌ Timed-out after %s seconds - schema registry did not come up and start serving its api in time.\n' "${TIMEOUT}"
+        exit 1
+    fi
+    # --------- progress line (single‑line update) ----------
+    elapsed=$(( now - start ))
+    remaining=$(( end - now ))
+    printf '\r\e[K⏳ Waiting for "%s" resource "%s" in namespace "%s"... %ds elapsed, %ds left' \
+           "${RESOURCE_TYPE}" "${RESOURCE_NAME}" "${NAMESPACE}" "$elapsed" "$remaining"
+    sleep "${INTERVAL}"
+done
+
 echo "🌐 Schema registry: http://schema-registry.localho.st:8080/apis/ccompat/v7"
-# echo "📚 Adding sample schemas to registry"
-# sleep 10
-# "${SCRIPT_DIR}/example-schemas/script-register-example-schemas.sh"
+echo "📚 Adding sample schemas to registry"
+"${SCRIPT_DIR}/example-schemas/script-register-example-schemas.sh"

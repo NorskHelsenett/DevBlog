@@ -1,14 +1,14 @@
 apiVersion: kafka.strimzi.io/v1
 kind: Kafka
 metadata:
-  name: our-mtls-kafka-cluster
+  name: ws-kafka-cluster-mtls
   namespace: kafka
 spec:
   kafka:
     authorization:
       type: simple
       superUsers:
-        - CN=our-superuser
+        - CN=ws-kafka-cluster-mtls-superuser
     listeners:
       - name: plain
         port: 9092
@@ -65,7 +65,7 @@ metadata:
   name: dual-role
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   replicas: 3
   roles:

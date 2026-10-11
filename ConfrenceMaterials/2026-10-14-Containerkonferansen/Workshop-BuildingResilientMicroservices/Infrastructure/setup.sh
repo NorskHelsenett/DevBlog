@@ -14,5 +14,5 @@ kind create cluster --config "${SCRIPT_DIR}/infra/kind/kindCluster.yaml"
 "${SCRIPT_DIR}/infra/kafka/install-kafka.sh"
 # "${SCRIPT_DIR}/infra/observability/install-observability.sh"
 
-"${SCRIPT_DIR}/utilities/extract-kubernetes-secret.sh" --namespace "kafka" --secret "our-superuser" --output-dir "${SCRIPT_DIR}/credentials/kafka/"
-"${SCRIPT_DIR}/utilities/extract-kubernetes-secret.sh" --namespace "kafka" --secret "our-mtls-kafka-cluster-trustbundle" --output-dir "${SCRIPT_DIR}/credentials/kafka/"
+"${SCRIPT_DIR}/utilities/extract-kubernetes-secret.sh" --namespace "kafka" --secret "ws-kafka-cluster-mtls-superuser" --output-dir "${SCRIPT_DIR}/credentials/kafka/"
+"${SCRIPT_DIR}/utilities/extract-kubernetes-secret.sh" --namespace "kafka" --secret "ws-kafka-cluster-mtls-trustbundle" --output-dir "${SCRIPT_DIR}/credentials/kafka/"

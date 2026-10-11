@@ -1,7 +1,7 @@
 # kind create cluster --config kindCluster.yaml
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
-name: demo-cluster # kind get clusters | xargs -n 1 kind delete cluster --name
+name: workshop-cluster # kind get clusters | xargs -n 1 kind delete cluster --name
 # containerdConfigPatches:
 # - |-
 #   [plugins."io.containerd.grpc.v1.cri".registry]

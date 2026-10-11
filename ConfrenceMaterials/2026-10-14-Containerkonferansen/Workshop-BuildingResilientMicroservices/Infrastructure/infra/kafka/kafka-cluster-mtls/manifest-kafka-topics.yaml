@@ -4,7 +4,7 @@ metadata:
   name: kafka-tenant-a-testtopic
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   partitions: 3
   # replicas: 2
@@ -18,10 +18,25 @@ metadata:
   name: not-owned-by-or-accessible-to-anyone
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   partitions: 3
   # replicas: 2
   config:
     cleanup.policy: compact
     segment.bytes: 100000000
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: ws-topic-1
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: ws-kafka-cluster-mtls
+spec:
+  partitions: 3
+  # replicas: 2
+  config:
+    cleanup.policy: compact
+    segment.bytes: 100000000
+---

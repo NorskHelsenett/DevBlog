@@ -1,26 +1,27 @@
 # If setup with compose, you can run to use kubectl outside after:
-# kind export kubeconfig --name demo-cluster
+# kind export kubeconfig --name workshop-cluster
 services:
   workshop:
     build:
-      context: .
-      dockerfile: ./Dockerfile
+      context: ./Infrastructure
+      # dockerfile: ./Dockerfile
     image: localhost/kind-cluster-script-runner:latest
     container_name: kind-cluster-script-setup-runner
-    # command: ["./setup.sh"]
-    environment:
-      HOST_UID: "${HOST_UID}"
-      HOST_GID: "${HOST_GID}"
     entrypoint:
       - '/bin/bash'
       - '-c'
       - |
+        echo "yo"
+        # Ensure no leftovers on restart, some of the scripts aren't happy if previous setup only got half-way done
+        # /work/Infrastructure/teardown.sh
+
         echo "$(ip route get 1.1.1.1 | awk '{print $NF; exit}') keycloak.localho.st" >> /etc/hosts
 
-        ./setup.sh
+        echo "starting setup"
+        /work/Infrastructure/setup.sh
 
         # Ensure extracted credentials for use directly from host are not owned by root and inaccessible to user:
-        chown -R 777 /work/credentials
+        chown -R 777 /work/Infrastructure/credentials
 
         # Leave container running, so that people without kind or kubectl can exec into it and use them from there:
         echo "Waiting forever, so that you have shell"
@@ -32,5 +33,3 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     stdin_open: true   # `docker compose run` gets a TTY
     tty: true
-    # ports:
-    #   - "2375:2375"

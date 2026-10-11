@@ -4,7 +4,7 @@ metadata:
   name: schema-registry-storage-events
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   partitions: 3
   replicas: 3
@@ -19,7 +19,7 @@ metadata:
   name: schema-registry-storage-snapshots
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   partitions: 3
   replicas: 3
@@ -34,7 +34,7 @@ metadata:
   name: schema-registry-storage-journal
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   partitions: 3
   replicas: 3
@@ -49,7 +49,7 @@ metadata:
   name: schema-registry-user
   namespace: kafka
   labels:
-    strimzi.io/cluster: our-mtls-kafka-cluster
+    strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   authentication:
     type: tls
@@ -83,15 +83,19 @@ spec:
 apiVersion: access.strimzi.io/v1alpha1
 kind: KafkaAccess
 metadata:
-  name: ka-schema-registry
+  name: kafka-access-schema-registry
   namespace: kafka
+  # labels:
+  #   strimzi.io/cluster: ws-kafka-cluster-mtls
 spec:
   kafka:
-    name: our-mtls-kafka-cluster
+    name: ws-kafka-cluster-mtls
+    namespace: kafka
     listener: tls
   user:
     kind: KafkaUser
     apiGroup: kafka.strimzi.io
+    namespace: kafka
     name: schema-registry-user
 ---
 apiVersion: registry.apicur.io/v1
@@ -110,7 +114,22 @@ spec:
     storage:
       type: kafkasql
       kafkasql:
-        kafkaAccessSecretName: ka-schema-registry
+        # kafkaAccessSecretName: kafka-access-schema-registry
+        bootstrapServers: "ws-kafka-cluster-mtls-kafka-bootstrap.kafka.svc.cluster.local:9093"
+        tls:
+          # The need to use this truststore for the p12 file is sketchy as fuck, I think it gives the access to issue their own certs. They should have used the cluster-ca.crt file from the ws-kafka-cluster-mtls-trustbundle secret instead.
+          truststoreSecretRef:
+            name: "ws-kafka-cluster-mtls-cluster-ca-cert"
+            key: "ca.p12"
+          truststorePasswordSecretRef:
+            name: "ws-kafka-cluster-mtls-cluster-ca-cert"
+            key: "ca.password"
+          keystoreSecretRef:
+            name: "schema-registry-user"
+            key: "user.p12"
+          keystorePasswordSecretRef:
+            name: "schema-registry-user"
+            key: "user.password"
     ingress:
       host: registry.example.com
     env:

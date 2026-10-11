@@ -60,15 +60,15 @@ TOKEN=$(curl -s \
 echo "👥 KafkaUI: Create global admin and read only groups and users"
 "${SCRIPT_DIR}/../../../utilities/keycloak-create-group-with-user.sh" \
   --kc-url "${KEYCLOAK_URL}" --token "${TOKEN}" --realm "${REALM}" \
-  --new-group-name "kui-admins" --new-user-username "kui-admin" \
+  --new-group-name "kui-admins" --new-user-username "admin" \
    $VERBOSE_FLAG
 "${SCRIPT_DIR}/../../../utilities/keycloak-create-group-with-user.sh" \
   --kc-url "${KEYCLOAK_URL}" --token "${TOKEN}" --realm "${REALM}" \
-  --new-group-name "kui-ro" --new-user-username "kui-ro-user" \
+  --new-group-name "kui-ro" --new-user-username "user-ro" \
    $VERBOSE_FLAG
 "${SCRIPT_DIR}/../../../utilities/keycloak-create-group-with-user.sh" \
   --kc-url "${KEYCLOAK_URL}" --token "${TOKEN}" --realm "${REALM}" \
-  --new-group-name "kui-no-access" --new-user-username "kui-no-access" \
+  --new-group-name "kui-no-access" --new-user-username "no-access" \
    $VERBOSE_FLAG
 
 "${SCRIPT_DIR}/../../../utilities/keycloak-create-group-with-user.sh" \
@@ -88,3 +88,4 @@ echo "👥 KafkaUI: Create global admin and read only groups and users"
   --kc-url "${KEYCLOAK_URL}" --token "${TOKEN}" --realm "${REALM}" \
   --new-group-name "kui-awesome-topics-ro" --new-user-username "kui-awesome-ro-user" \
    $VERBOSE_FLAG
+ß

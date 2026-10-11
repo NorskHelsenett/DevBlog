@@ -75,6 +75,8 @@ function AddSchemaToRegistry {
   log "============== Done Creating Example Schema ${SCHEMA_NAME} ============="
 }
 
+echo "📚 Adding sample schemas to registry"
+
 CONTENT_AVRO=$(cat "${SCRIPT_DIR}/Person.avsc")
 CONTENT_PROTO=$(cat "${SCRIPT_DIR}/Person.proto")
 CONTENT_JSON=$(cat "${SCRIPT_DIR}/Person.json")

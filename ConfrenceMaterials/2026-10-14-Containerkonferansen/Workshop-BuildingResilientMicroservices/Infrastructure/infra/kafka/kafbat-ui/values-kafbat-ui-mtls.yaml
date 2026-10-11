@@ -9,9 +9,9 @@ env:
   value: "todo-set-up-with-eso-and-retrieve-with-kubectl-here"
 
 - name: KAFKA_CLUSTERS_0_NAME
-  value: "KcMtlsCluster"
+  value: "WsFirstCluster"
 - name: KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS
-  value: "our-mtls-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9093"
+  value: "ws-kafka-cluster-mtls-kafka-bootstrap.kafka.svc.cluster.local:9093"
 - name: KAFKA_CLUSTERS_0_SCHEMAREGISTRY
   value: "http://schema-registry-app-service.kafka.svc.cluster.local:8080/apis/ccompat/v7"
 - name: KAFKA_CLUSTERS_0_PROPERTIES_SECURITY_PROTOCOL
@@ -19,12 +19,12 @@ env:
 - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_TYPE
   value: "PEM"
 - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_LOCATION
-  # value: "/certs/user/ca.crt"
-  value: "/certs/cluster-trustbundle/cluster-ca.crt"
+  # value: "/certs/first-cluster/user/ca.crt"
+  value: "/certs/first-cluster/cluster-trustbundle/cluster-ca.crt"
 - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_TYPE
   value: "PKCS12"
 - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_LOCATION
-  value: "/certs/user/user.p12"
+  value: "/certs/first-cluster/user/user.p12"
 # - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD
 #   value: ""
 # - name: KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD
@@ -45,19 +45,53 @@ env:
   value: "1"
 - name: KAFKA_CLUSTERS_0_AUDIT_LEVEL
   value: "all"
+
+- name: KAFKA_CLUSTERS_1_NAME
+  value: "WsSecondCluster"
+- name: KAFKA_CLUSTERS_1_BOOTSTRAPSERVERS
+  value: "kafka-cluster-mtls-second-kafka-bootstrap.kafka.svc.cluster.local:10893"
+- name: KAFKA_CLUSTERS_1_SCHEMAREGISTRY
+  value: "http://schema-registry-app-service.kafka.svc.cluster.local:8080/apis/ccompat/v7"
+- name: KAFKA_CLUSTERS_1_PROPERTIES_SECURITY_PROTOCOL
+  value: "SSL"
+- name: KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_TYPE
+  value: "PEM"
+- name: KAFKA_CLUSTERS_1_PROPERTIES_SSL_TRUSTSTORE_LOCATION
+  value: "/certs/second-cluster/cluster-trustbundle/cluster-ca.crt"
+- name: KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_TYPE
+  value: "PKCS12"
+- name: KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_LOCATION
+  value: "/certs/second-cluster/user/user.p12"
+- name: KAFKA_CLUSTERS_1_AUDIT_TOPICAUDITENABLED
+  value: "true"
+- name: KAFKA_CLUSTERS_1_AUDIT_CONSOLEAUDITENABLED
+  value: "true"
+- name: KAFKA_CLUSTERS_1_AUDIT_TOPIC
+  value: "__kui-audit-log"
+- name: KAFKA_CLUSTERS_1_AUDIT_AUDITTOPICPROPERTIES_RETENTION_MS
+  value: "-1" # Time-wise, retain logs forever
+- name: KAFKA_CLUSTERS_1_AUDIT_AUDITTOPICPROPERTIES_RETENTION_BYTES
+  value: "1048576" # Only keep 1MiB of logs locally
+- name: KAFKA_CLUSTERS_1_AUDIT_AUDITTOPICSPARTITIONS
+  value: "1"
+- name: KAFKA_CLUSTERS_1_AUDIT_LEVEL
+  value: "all"
 envs:
   secretMappings:
     # KAFKA_CLUSTERS_0_PROPERTIES_SSL_TRUSTSTORE_PASSWORD:
-    #   name: our-mtls-kafka-cluster-cluster-ca-cert
+    #   name: ws-kafka-cluster-mtls-cluster-ca-cert
     #   keyName: ca.password
     CLIENT_KEY_STORE_PASSWORD:
-      name: our-superuser
+      name: ws-kafka-cluster-mtls-superuser
       keyName: user.password
     KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEYSTORE_PASSWORD:
-      name: our-superuser
+      name: ws-kafka-cluster-mtls-superuser
+      keyName: user.password
+    KAFKA_CLUSTERS_1_PROPERTIES_SSL_KEYSTORE_PASSWORD:
+      name: ws-kafka-cluster-second-superuser
       keyName: user.password
     # KAFKA_CLUSTERS_0_PROPERTIES_SSL_KEY_PASSWORD:
-    #   name: our-superuser
+    #   name: ws-kafka-cluster-mtls-superuser
     #   keyName: user.password
     # CLUSTER_AUTH_OAUTH_CLIENT_ID:
     #   name: kafka-kafbat-ui-client
@@ -73,27 +107,44 @@ envs:
     #   keyName: client-secret
 
 volumeMounts:
-# - mountPath: /certs/ca.crt
+# - mountPath: /certs/first-cluster/ca.crt
 #   name: client-certs
 #   subPath: ca.crt
-# - mountPath: /certs/user.p12
+# - mountPath: /certs/first-cluster/user.p12
 #   name: client-certs
 #   subPath: user.p12
-- mountPath: /certs/user/
-  name: client-certs
-- mountPath: /certs/cluster-trustbundle/
-  name: cluster-trustbundle
+- mountPath: /certs/first-cluster/user/
+  name: first-cluster-client-certs
+- mountPath: /certs/first-cluster/cluster-trustbundle/
+  name: first-cluster-trustbundle
+
+- mountPath: /certs/second-cluster/user/
+  name: second-cluster-client-certs
+- mountPath: /certs/second-cluster/cluster-trustbundle/
+  name: second-cluster-trustbundle
+
 - name: dynamic-configs
   mountPath: /our-cluster/dynamic-configs
+
 volumes:
-- name: cluster-trustbundle
+- name: first-cluster-trustbundle
   secret:
     defaultMode: 420
-    secretName: our-mtls-kafka-cluster-trustbundle
-- name: client-certs
+    secretName: ws-kafka-cluster-mtls-trustbundle
+- name: first-cluster-client-certs
   secret:
     defaultMode: 420
-    secretName: our-superuser
+    secretName: ws-kafka-cluster-mtls-superuser
+
+- name: second-cluster-trustbundle
+  secret:
+    defaultMode: 420
+    secretName: kafka-cluster-mtls-second-trustbundle
+- name: second-cluster-client-certs
+  secret:
+    defaultMode: 420
+    secretName: ws-kafka-cluster-second-superuser
+
 - name: dynamic-configs
   emptyDir: {}
 
@@ -101,24 +152,24 @@ yamlApplicationConfig:
   # kafka:
   #   clusters:
   #   - name: KcMtlsCluster
-  #     bootstrapServers: our-mtls-kafka-cluster-kafka-bootstrap.kafka.svc.cluster.local:9094
+  #     bootstrapServers: ws-kafka-cluster-mtls-kafka-bootstrap.kafka.svc.cluster.local:9094
   #     properties:
   #       protocol: "SSL"
   #       security.protocol: "SSL"
   #     schemaRegistry: http://svc-schema-registry.kafka.svc.cluster.local:8080/apis/ccompat/v7
   #     schemaRegistryTopicSubjectSuffix: -value
   #     # ssl:
-  #     #   truststore-location: "/certs/ca.crt"
+  #     #   truststore-location: "/certs/first-cluster/ca.crt"
   #     #   truststore-password: "${CLUSTER_TRUST_STORE_PASSWORD}"  # Password to access the truststore
   #     #   truststore-type: "PEM"
   #     #   truststore:
   #     #     type: "PEM"
-  #     #     location: "/certs/ca.crt"
+  #     #     location: "/certs/first-cluster/ca.crt"
   #     #   keystore:
   #     #     type: "PKCS12"
-  #     #     location: "/certs/user.p12"
+  #     #     location: "/certs/first-cluster/user.p12"
   #     #     password: "${CLIENT_KEY_STORE_PASSWORD}"  # Password to access the truststore
-  #     #   keystore-location: "/certs/user.p12"
+  #     #   keystore-location: "/certs/first-cluster/user.p12"
   #     #   # keystore-password: "${CLIENT_KEY_STORE_PASSWORD}"  # Password to access the truststore
   #     #   keystore-type: "PKCS12"
 
@@ -147,7 +198,8 @@ yamlApplicationConfig:
     roles:
     - name: "admins"
       clusters:
-      - KcMtlsCluster
+      - WsFirstCluster
+      - WsSecondCluster
       subjects:
       - provider: oauth
         type: role
@@ -178,7 +230,7 @@ yamlApplicationConfig:
         actions: all
     - name: "readonly"
       clusters:
-      - KcMtlsCluster
+      - WsFirstCluster
       subjects:
       - provider: oauth
         type: role

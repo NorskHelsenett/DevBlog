@@ -22,7 +22,7 @@
 set -o errexit
 
 # 1. Create registry container unless it already exists
-CLUSTER_NAME="${KIND_CLUSTER_NAME:-demo-cluster}"
+CLUSTER_NAME="${KIND_CLUSTER_NAME:-workshop-cluster}"
 reg_name="${REGISTRY_NAME:-kind-registry}"
 reg_port="${REGISTRY_PORT:-5001}"
 

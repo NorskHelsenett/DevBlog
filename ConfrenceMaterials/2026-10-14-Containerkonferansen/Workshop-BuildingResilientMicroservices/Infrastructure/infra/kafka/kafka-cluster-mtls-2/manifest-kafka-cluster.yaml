@@ -1,0 +1,80 @@
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: kafka-cluster-mtls-second
+  namespace: kafka
+spec:
+  kafka:
+    authorization:
+      type: simple
+      superUsers:
+        - CN=ws-kafka-cluster-second-superuser
+    listeners:
+      - name: plain
+        port: 10892
+        tls: true
+        type: internal
+      - name: tls
+        authentication:
+          type: tls
+        port: 10893
+        tls: true
+        type: internal
+      - name: tlsext
+        port: 10894
+        type: nodeport
+        tls: true
+        authentication:
+          type: tls
+        configuration:
+          ipFamilyPolicy: "SingleStack"
+          ipFamilies: ["IPv4"]
+          bootstrap:
+            alternativeNames:
+            - "127.0.0.1"
+            - "localhost"
+            - "kafka-bootstrap-2.localho.st"
+            nodePort: 30894
+          brokers:
+          - broker: 0
+            advertisedHost: "127.0.0.1"
+            advertisedPort: 10895
+            nodePort: 30895
+          - broker: 1
+            advertisedHost: "127.0.0.1"
+            nodePort: 30896
+            advertisedPort: 10896
+          - broker: 2
+            advertisedHost: "127.0.0.1"
+            nodePort: 30897
+            advertisedPort: 10897
+    # logging:
+    #   type: inline
+    #   loggers:
+    #     logger.authorizer.level: DEBUG
+    #     logger.oauth.name: io.strimzi.kafka.oauth
+    #     logger.oauth.level: DEBUG
+  entityOperator:
+    # This needs to exist here for topic resources to be picked up and made available:
+    topicOperator: {}
+    userOperator: {}
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaNodePool
+metadata:
+  name: dual-role
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: kafka-cluster-mtls-second
+spec:
+  replicas: 3
+  roles:
+    - controller
+    - broker
+  storage:
+    type: jbod
+    volumes:
+      - id: 0
+        type: persistent-claim
+        size: 1Gi
+        kraftMetadata: shared

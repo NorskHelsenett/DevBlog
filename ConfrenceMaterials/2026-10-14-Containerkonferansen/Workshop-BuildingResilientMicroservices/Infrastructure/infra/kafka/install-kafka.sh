@@ -45,7 +45,10 @@ EOF
 
 # "${SCRIPT_DIR}/kafka-cluster-oauth/install-kafka-cluster-oauth.sh" --namespace "${KAFKA_NS}"
 "${SCRIPT_DIR}/kafka-cluster-mtls/install-kafka-cluster-mtls.sh" --namespace "${KAFKA_NS}" $VERBOSE_FLAG
+"${SCRIPT_DIR}/kafka-cluster-mtls-2/install-kafka-cluster-second.sh" --namespace "${KAFKA_NS}" $VERBOSE_FLAG
 
 "${SCRIPT_DIR}/schema-registry/install-schema-registry.sh" --namespace "${KAFKA_NS}" $VERBOSE_FLAG
 
 "${SCRIPT_DIR}/kafbat-ui/install-kafka-ui.sh" --namespace "${KAFKA_NS}" $VERBOSE_FLAG
+
+"${SCRIPT_DIR}/schema-registry/example-schemas/script-register-example-schemas.sh"

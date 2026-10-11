@@ -67,7 +67,7 @@ spec:
       type: custom
       authorizerClass: io.strimzi.kafka.oauth.server.authorizer.KeycloakAuthorizer
       superUsers:
-        - CN=our-superuser
+        - CN=ws-kafka-cluster-mtls-superuser
         - service-account-kafka-admin
         - service-account-kafka-broker
         - service-account-schema-registry
