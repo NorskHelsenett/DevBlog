@@ -56,7 +56,7 @@ function AddSchemaToRegistry {
   JSON_PAYLOAD=$(jq -Rs --arg st "$SCHEMA_TYPE" '{schema: ., schemaType: $st}' "${SCHMEA_FILE}")
 
   log "Posting schema to registry"
-  curl -X POST "${SCHEMA_REGISTRY_ADDRESS}/subjects/${SCHEMA_NAME}/versions" \
+  curl -sS -X POST "${SCHEMA_REGISTRY_ADDRESS}/subjects/${SCHEMA_NAME}/versions" \
     -H "Content-Type: application/vnd.schemaregistry.v1+json" \
     -d "${JSON_PAYLOAD}"
   log "============== Done Creating Example Schema ${SCHEMA_NAME} ============="

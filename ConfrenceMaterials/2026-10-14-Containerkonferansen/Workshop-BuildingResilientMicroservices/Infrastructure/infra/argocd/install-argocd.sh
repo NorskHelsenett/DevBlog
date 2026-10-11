@@ -76,7 +76,7 @@ if [ "$ARGO_AUTH" = "none" ]; then
     echo "🌐 UI: http://localhost:30080"
 
     log "Create secret for reading from registry for argocd"
-    CONTAINER_REGISTRY_SECRET=$(echo -n '{"auths":{"local-registry.default.svc.cluster.local:5000":{"username":"","password":"","email":"none","auth":""}}}' | base64)
+    CONTAINER_REGISTRY_SECRET=$(echo -n '{"auths":{"local-registry.default.svc.cluster.local:5000":{"username":"","password":"","email":"none","auth":""}}}' | base64 | tr -d '\n')
 kubectl apply -f - >/dev/null <<EOF
 apiVersion: v1
 kind: Secret
@@ -87,17 +87,6 @@ type: kubernetes.io/dockerconfigjson
 data:
   .dockerconfigjson: $CONTAINER_REGISTRY_SECRET
 EOF
-# cat <<EOF | kubectl apply -f -
-#     # kubectl apply -f - >/dev/null <<EOF
-#     # apiVersion: v1
-#     # kind: Secret
-#     # metadata:
-#     #   name: local-reg-secret
-#     #   namespace: $ARGO_NS
-#     # type: kubernetes.io/dockerconfigjson
-#     # data:
-#     #   .dockerconfigjson: $CONTAINER_REGISTRY_SECRET
-# EOF
 
     JSON='
     {
