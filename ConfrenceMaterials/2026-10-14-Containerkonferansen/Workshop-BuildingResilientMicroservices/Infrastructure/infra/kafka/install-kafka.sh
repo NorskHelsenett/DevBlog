@@ -52,3 +52,5 @@ EOF
 "${SCRIPT_DIR}/kafbat-ui/install-kafka-ui.sh" --namespace "${KAFKA_NS}" $VERBOSE_FLAG
 
 "${SCRIPT_DIR}/schema-registry/example-schemas/script-register-example-schemas.sh"
+
+"${SCRIPT_DIR}/workshop-resources/create-workshop-resources.sh"

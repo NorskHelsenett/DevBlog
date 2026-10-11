@@ -8,7 +8,7 @@ spec:
     authorization:
       type: simple
       superUsers:
-        - CN=ws-kafka-cluster-second-superuser
+        - CN=kafka-cluster-mtls-second-superuser
     listeners:
       - name: plain
         port: 10892
