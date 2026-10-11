@@ -35,9 +35,9 @@ function AddSchemaToRegistry {
         if [[ "$1" != *=* ]]; then shift; fi # Value is next arg if no `=`
         SCHEMA_NAME="$1"
         ;;
-      --value*|-v*)
+      --schema-file*|-f*)
         if [[ "$1" != *=* ]]; then shift; fi
-        SCHEMA_VALUE="$1"
+        SCHMEA_FILE="$1"
         ;;
       --type*|-t*)
         if [[ "$1" != *=* ]]; then shift; fi
@@ -52,40 +52,24 @@ function AddSchemaToRegistry {
   done
 
   log "============== Creating Example Schema ${SCHEMA_NAME} =================="
-  log "Escaping double quotes in schema ${SCHEMA_NAME}"
-  # Note double escape of the quotes (\\")
-  local schema_escaped=$(echo "${SCHEMA_VALUE}" | sed 's/"/\\"/g')
-  local schema_payload_file="${SCRIPT_DIR}/schema.json"
-
-  log "Writing request body containing escaped schema to file"
-  echo '{'                                      >  "${schema_payload_file}"
-  echo "  \"schema\": \"${schema_escaped}\","   >> "${schema_payload_file}"
-  echo "  \"schemaType\":\"${SCHEMA_TYPE}\""    >> "${schema_payload_file}"
-  echo '}'                                      >> "${schema_payload_file}"
-  # Valid schema types at the moment are ["JSON","PROTOBUF","AVRO"] (curl --silent -X GET http://schema-registry.localho.st:8080/apis/ccompat/v7/schemas/types)
-
-  # log "removing newlines in data to post"
-  # awk '{printf "%s",$0}' "${schema_payload_file}" > "${schema_payload_file}.tmp" && mv "${schema_payload_file}.tmp" "${schema_payload_file}"
+  log "Creating schema payload ${SCHEMA_NAME}"
+  JSON_PAYLOAD=$(jq -Rs --arg st "$SCHEMA_TYPE" '{schema: ., schemaType: $st}' "${SCHMEA_FILE}")
 
   log "Posting schema to registry"
-  curl -sS -X POST -H "Content-Type: application/json" \
-    --data @"${schema_payload_file}" \
-    "${SCHEMA_REGISTRY_ADDRESS}/subjects/${SCHEMA_NAME}/versions" 1>/dev/null
-  rm "${schema_payload_file}"
+  curl -X POST "${SCHEMA_REGISTRY_ADDRESS}/subjects/${SCHEMA_NAME}/versions" \
+    -H "Content-Type: application/vnd.schemaregistry.v1+json" \
+    -d "${JSON_PAYLOAD}"
   log "============== Done Creating Example Schema ${SCHEMA_NAME} ============="
 }
 
 echo "📚 Adding sample schemas to registry"
 
-CONTENT_AVRO=$(cat "${SCRIPT_DIR}/Person.avsc")
-CONTENT_PROTO=$(cat "${SCRIPT_DIR}/Person.proto")
-CONTENT_JSON=$(cat "${SCRIPT_DIR}/Person.json")
 log "Registering avro schema"
-AddSchemaToRegistry --name "example-person-avro" --value "${CONTENT_AVRO}" --type "AVRO"
+AddSchemaToRegistry --name "example-person-avro" --schema-file "${SCRIPT_DIR}/Person.avsc" --type "AVRO"
 log "Registering proto schema"
-AddSchemaToRegistry --name "example-person-protobuf" --value "${CONTENT_PROTO}" --type "PROTOBUF"
+AddSchemaToRegistry --name "example-person-protobuf" --schema-file "${SCRIPT_DIR}/Person.proto" --type "PROTOBUF"
 log "Registering json schema"
-AddSchemaToRegistry --name "example-person-json" --value "${CONTENT_JSON}" --type "JSON"
+AddSchemaToRegistry --name "example-person-json" --schema-file "${SCRIPT_DIR}/Person.json" --type "JSON"
 
 REGISTERED_SUBJECTS=$(curl -sS "${SCHEMA_REGISTRY_ADDRESS}/subjects" | jq)
 PROTOBUF_VERSION_SUBJECTS=$(curl -sS "${SCHEMA_REGISTRY_ADDRESS}/subjects/example-person-protobuf/versions" | jq)
