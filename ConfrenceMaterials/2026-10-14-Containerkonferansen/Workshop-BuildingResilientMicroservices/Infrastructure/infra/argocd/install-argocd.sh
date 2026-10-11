@@ -34,7 +34,6 @@ log() {
   fi
 }
 
-
 echo "🕵️ Check if ArgoCD install maifest stale and update it"
 "${SCRIPT_DIR}/../../utilities/refresh-file.sh" \
   --url "https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml" \
@@ -64,8 +63,9 @@ if [ "$ARGO_AUTH" = "none" ]; then
 
     # kubectl apply -f "$SCRIPT_DIR/argocd-kind-cluster-secret.yaml" 1>/dev/null
 
+
     echo "⏳ Waiting for server restart..."
-    kubectl rollout status deployment/argocd-server -n argocd --timeout=60s 1>/dev/null
+    kubectl rollout status deployment/argocd-server -n "${ARGO_NS}" --timeout=60s 1>/dev/null
 
     echo "🗑️ Delete ArgoCDs cursed network policies which among other things prevents itself from reaching out and fetching things like charts"
     # # kubectl get networkpolicies.networking.k8s.io -n argocd -o name | xargs -I {}  kubectl -n argocd delete {} 1>/dev/null
@@ -74,6 +74,44 @@ if [ "$ARGO_AUTH" = "none" ]; then
     echo "✅ ArgoCD is now running in local dev mode!"
     # echo "📝 Port forward: kubectl port-forward svc/argocd-server -n argocd 8080:80"
     echo "🌐 UI: http://localhost:30080"
+
+    log "Create secret for reading from registry for argocd"
+    CONTAINER_REGISTRY_SECRET=$(echo -n '{"auths":{"local-registry.default.svc.cluster.local:5000":{"username":"","password":"","email":"none","auth":""}}}' | base64)
+kubectl apply -f - >/dev/null <<EOF
+apiVersion: v1
+kind: Secret
+metadata:
+  name: local-reg-secret
+  namespace: $ARGO_NS
+type: kubernetes.io/dockerconfigjson
+data:
+  .dockerconfigjson: $CONTAINER_REGISTRY_SECRET
+EOF
+# cat <<EOF | kubectl apply -f -
+#     # kubectl apply -f - >/dev/null <<EOF
+#     # apiVersion: v1
+#     # kind: Secret
+#     # metadata:
+#     #   name: local-reg-secret
+#     #   namespace: $ARGO_NS
+#     # type: kubernetes.io/dockerconfigjson
+#     # data:
+#     #   .dockerconfigjson: $CONTAINER_REGISTRY_SECRET
+# EOF
+
+    JSON='
+    {
+      "data": {
+        "helm.repositories": "- name: local-oci\n  url: http://local-registry.default.svc.cluster.local:5000\n  insecure: true\n",
+        "repositories": "- type: helm\n  url: http://local-registry.default.svc.cluster.local:5000\n  insecure: true\n"
+      }
+    }'
+
+    kubectl -n "${ARGO_NS}" patch configmap argocd-cm --type merge -p "${JSON}"
+
+    kubectl -n "${ARGO_NS}" rollout restart deployment argocd-server
+    kubectl -n "${ARGO_NS}" rollout restart deployment argocd-repo-server
+    kubectl -n "${ARGO_NS}" rollout restart deployment argocd-application-controller
 else
     echo "⏳ Waiting for ArgoCD pods to be ready..."
     kubectl wait --for=condition=available deployment/argocd-server -n "${ARGO_NS}" --timeout=300s 1>/dev/null

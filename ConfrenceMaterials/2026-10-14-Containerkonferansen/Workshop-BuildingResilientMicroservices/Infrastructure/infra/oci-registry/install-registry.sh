@@ -88,3 +88,37 @@ data:
     host: "localhost:${reg_port}"
     help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
 EOF
+
+# 6. Make it avaialbe for argocd
+# HOST_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' kind-registry | awk '{print $1}')
+HOST_IP=$(docker inspect kind-registry | jq -r '.[0].NetworkSettings.Networks | [.[] .IPAddress] | .[-1]')
+cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: local-registry
+  namespace: default
+spec:
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: local-registry-slice
+  namespace: default
+  labels:
+    kubernetes.io/service-name: local-registry
+addressType: IPv4
+ports:
+  - name: http
+    protocol: TCP
+    port: 5000
+endpoints:
+  - addresses:
+      - $HOST_IP
+    conditions:
+      ready: true
+EOF

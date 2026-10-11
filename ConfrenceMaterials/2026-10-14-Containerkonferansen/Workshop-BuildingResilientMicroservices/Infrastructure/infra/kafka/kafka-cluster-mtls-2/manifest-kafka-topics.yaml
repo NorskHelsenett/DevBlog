@@ -1,7 +1,7 @@
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
-  name: kafka-tenant-a-testtopic
+  name: ws-cluster-2-local-read-v1
   namespace: kafka
   labels:
     strimzi.io/cluster: kafka-cluster-mtls-second
@@ -15,21 +15,7 @@ spec:
 apiVersion: kafka.strimzi.io/v1
 kind: KafkaTopic
 metadata:
-  name: not-owned-by-or-accessible-to-anyone
-  namespace: kafka
-  labels:
-    strimzi.io/cluster: kafka-cluster-mtls-second
-spec:
-  partitions: 3
-  # replicas: 2
-  config:
-    cleanup.policy: compact
-    segment.bytes: 100000000
----
-apiVersion: kafka.strimzi.io/v1
-kind: KafkaTopic
-metadata:
-  name: ws-topic-1
+  name: ws-cluster-2-local-write-v1
   namespace: kafka
   labels:
     strimzi.io/cluster: kafka-cluster-mtls-second

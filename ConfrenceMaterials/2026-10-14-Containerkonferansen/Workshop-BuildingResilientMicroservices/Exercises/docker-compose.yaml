@@ -8,7 +8,7 @@ services:
     image: localhost/state-distributor
     container_name: state-distributor
     build:
-      context: ./FullyWorkingExample
+      context: ./FullyWorkingExample/ResilientMicroservice
       # context: ./Exercise1-ReceiveAndProduce
       # context: ./Exercise2-ConsumeAndMakeAvailable
       # context: ./Exercise3-ResumeWhenRestarted
