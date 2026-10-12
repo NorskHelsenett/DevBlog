@@ -1,9 +1,14 @@
 using Confluent.Kafka;
+using Confluent.Kafka.SyncOverAsync;
+using Confluent.SchemaRegistry;
+using Confluent.SchemaRegistry.Serdes;
+using Google.Protobuf;
+using Namespace.Workshop.V1;
 
 public class KafkaProducerService
 {
     private readonly ILogger<KafkaConsumerService> _logger;
-    private readonly IProducer<byte[], byte[]?> _producer;
+    private readonly IProducer<byte[], ByteArrayMessage?> _producer;
     private readonly KafkaTopic _topic;
     private readonly Func<byte[], byte[]> _encrypt;
     private readonly Func<string, string> _encryptHeaderKey;
@@ -23,8 +28,16 @@ public class KafkaProducerService
             _encryptHeaderKey = delegate(string input) { return input; };
         }
         AppDomain.CurrentDomain.ProcessExit += new EventHandler(OnProcessExit);
-        var config = KafkaProducerConfigEnvBinder.GetProducerConfig();
-        _producer = new ProducerBuilder<byte[], byte[]?>(config).Build();
+        var protobufSerializerConfig = new ProtobufSerializerConfig
+        {
+            AutoRegisterSchemas = false,
+            UseLatestVersion = true
+        };
+        var schemaRegistryConfig = new CachedSchemaRegistryClient(KafkaSchemaRegistryConfigEnvBinder.GetSchemaRegistryConfig());
+        var producerConfig = KafkaProducerConfigEnvBinder.GetProducerConfig();
+        _producer = new ProducerBuilder<byte[], ByteArrayMessage?>(producerConfig)
+            .SetValueSerializer(new ProtobufSerializer<ByteArrayMessage?>(schemaRegistryConfig, protobufSerializerConfig).AsSyncOverAsync())
+            .Build();
         var topicName = Environment.GetEnvironmentVariable(KV_API_KAFKA_TOPIC_WRITE);
         if(string.IsNullOrWhiteSpace(topicName))
         {
@@ -38,11 +51,11 @@ public class KafkaProducerService
     public bool Produce(byte[] key, byte[]? value, Dictionary<string, byte[]> headers, CorrelationId correlationId)
     {
         _logger.LogTrace($"Producing message with correlation ID {correlationId.Value}");
-
-        var message = new Message<byte[], byte[]?>
+        var x = new byte[3];
+        var message = new Message<byte[], ByteArrayMessage?>
         {
             Key = _encrypt(key),
-            Value = (value == null) ? null : _encrypt(value)
+            Value = (value == null) ? null : new ByteArrayMessage { Value = ByteString.CopyFrom(_encrypt(value)) }
         };
 
         if(headers.Count > 0)

@@ -1,5 +1,9 @@
 using Confluent.Kafka;
+using Confluent.Kafka.SyncOverAsync;
 using Confluent.SchemaRegistry;
+using Confluent.SchemaRegistry.Serdes;
+using Google.Protobuf;
+using Namespace.Workshop.V1;
 
 public class KafkaConsumerService : BackgroundService
 {
@@ -63,20 +67,6 @@ public class KafkaConsumerService : BackgroundService
 
         consumer.Subscribe(_topic.Value);
 
-        // Don't check if topic has schemas defined for every invocation, jut do it once and use the appropriate handling method.
-        // Note for future me: array[x..] is new more efficient dotnet syntax for skip first x and take rest of array
-        Func<byte[], byte[]> handleSchemaMagicBytesInKey =
-            await TopicKeyHasSchema(_topic, stoppingToken)
-                ? delegate(byte[] input) { return input[5..]; }
-                : delegate(byte[] input) { return input; };
-        // Func<byte[], byte[]> handleSchemaMagicBytesInKey =
-        //     TopicKeyHasSchema(topic)
-        //         ? (byte[] input) => input[5..]
-        //         : (byte[] input) => input;
-        Func<byte[], byte[]> handleSchemaMagicBytesInValue =
-            await TopicValueHasSchema(_topic, stoppingToken)
-                ? delegate(byte[] input) { return input[5..]; }
-                : delegate(byte[] input) { return input; };
         try
         {
             while (!stoppingToken.IsCancellationRequested)
@@ -96,21 +86,11 @@ public class KafkaConsumerService : BackgroundService
                     var correlationIdFromHeader = string.Empty;
                     if(result.Message.Headers.TryGetLastBytes("Correlation-Id", out byte[] correlationIdHeaderValue)) correlationIdFromHeader = System.Text.Encoding.UTF8.GetString(correlationIdHeaderValue);
                     _logger.LogTrace($"The next event on topic {result.TopicPartitionOffset.Topic} partition {result.TopicPartitionOffset.Partition.Value} offset {result.TopicPartitionOffset.Offset.Value} received to the topic at the time {result.Message.Timestamp.UtcDateTime:o} has correlation ID \"{correlationIdFromHeader}\"");
-                    // if(result.Message.Value == null)
-                    // {
-                    //     var key = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
-                    //     _keyValueStateService.Remove(key, correlationIdFromHeader);
-                    // }
-                    // else
-                    // {
-                    //     var key = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
-                    //     var value = _decrypt(handleSchemaMagicBytesInValue(result.Message.Value));
-                    //     _keyValueStateService.Store(key, value, correlationIdFromHeader);
-                    // }
-                    var key   = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
+
+                    var key = _decrypt(result.Message.Key);
                     var value = result.Message.Value == null
                         ? null
-                        : _decrypt(handleSchemaMagicBytesInValue(result.Message.Value));
+                        : _decrypt(result.Message.Value.ToByteArray());
 
                     _inbox.Enqueue(
                         key,
@@ -141,10 +121,17 @@ public class KafkaConsumerService : BackgroundService
         }
     }
 
-    private IConsumer<byte[], byte[]> GetConsumer()
+    private IConsumer<byte[], ByteArrayMessage?> GetConsumer()
     {
         var consumerConfig = KafkaConsumerConfigEnvBinder.GetConsumerConfig();
-        var consumer = new ConsumerBuilder<byte[], byte[]>(consumerConfig)
+        var schemaRegistryConfig = KafkaSchemaRegistryConfigEnvBinder.GetSchemaRegistryConfig();
+        var schemaRegistry = new CachedSchemaRegistryClient(schemaRegistryConfig);
+        var protobufSerializerConfig = new ProtobufSerializerConfig()
+        {
+            BufferBytes = 100
+        };
+        var consumer = new ConsumerBuilder<byte[], ByteArrayMessage?>(consumerConfig)
+            .SetValueDeserializer(new ProtobufDeserializer<ByteArrayMessage?>(schemaRegistry, protobufSerializerConfig).AsSyncOverAsync())
             .SetPartitionsAssignedHandler((c, partitions) =>
             {
                 var savedTpos = _keyValueStateService.GetLastConsumedTopicPartitionOffsets();
@@ -173,7 +160,7 @@ public class KafkaConsumerService : BackgroundService
         return consumer;
     }
 
-    private async Task SaveStartupTimeLastTopicPartitionOffsets(IConsumer<byte[], byte[]> consumer)
+    private async Task SaveStartupTimeLastTopicPartitionOffsets(IConsumer<byte[], ByteArrayMessage?> consumer)
     {
         var partitions = await _kafkaAdminClient.GetTopicPartitions(_topic);
         List<KafkaTopicPartitionOffset> highOffsetsAtStartupTime = [];
@@ -211,44 +198,6 @@ public class KafkaConsumerService : BackgroundService
                 }
             }
         }
-    }
-
-    private async Task<bool> TopicKeyHasSchema(KafkaTopic topic, CancellationToken stoppingToken)
-    {
-        // curl -X GET http://localhost:8083/subjects/topicname-key/versions
-        // If the above doesn't work, screw it, just go with
-        // curl -X GET http://localhost:8083/subjects
-        // And grep for the expected name in the resulting array (should look like `["subject-1","subject-2",...,"last-subject"]`).
-        // The proper
-        // curl -X POST -H "Content-Type: application/vnd.schemaregistry.v1+json" --data '{"schema": "{\"type\": \"string\"}"}' http://localhost:8083/subjects/topicname-key
-        // is too much work to stuff into the dotnet http client, and the answer is also more involved to parse than what I can be bothered with right now.
-
-        var schemaName = $"{topic.Value}-key";
-        try
-        {
-            var registeredSchemas = await _schemaRegistryClient.GetAllSubjectsAsync();
-            return registeredSchemas?.Any(rs => rs == schemaName) == true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Got exception while checking if topic {topic.Value} key has schema by retrieving {schemaName}");
-        }
-        return false;
-    }
-
-    private async Task<bool> TopicValueHasSchema(KafkaTopic topic, CancellationToken stoppingToken)
-    {
-        var schemaName = $"{topic.Value}-value";
-        try
-        {
-            var registeredSchemas = await _schemaRegistryClient.GetAllSubjectsAsync();
-            return registeredSchemas?.Any(rs => rs == schemaName) == true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, $"Got exception while checking if topic {topic} value has schema by retrieving {schemaName}");
-        }
-        return false;
     }
 
     public override async Task StopAsync(CancellationToken stoppingToken)
