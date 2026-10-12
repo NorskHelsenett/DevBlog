@@ -76,14 +76,16 @@ function AddSchemaToRegistry {
   JSON_PAYLOAD=$(jq -Rs --arg st "$SCHEMA_TYPE" '{schema: ., schemaType: $st}' "${SCHMEA_FILE}")
 
   log "Posting schema to registry"
-  curl -X POST "${SCHEMA_REGISTRY_ADDRESS}/subjects/${SCHEMA_NAME}/versions" \
+  curl -sS -X POST "${SCHEMA_REGISTRY_ADDRESS}/subjects/${SCHEMA_NAME}/versions" \
     -H "Content-Type: application/vnd.schemaregistry.v1+json" \
     -d "${JSON_PAYLOAD}"
   log "============== Done Creating Example Schema ${SCHEMA_NAME} ============="
 }
 
 log "Registering workshop schemas"
-AddSchemaToRegistry --name "ws-cluster-1-local-read-v1-value" --schema-file "${SCRIPT_DIR}/WsSchema.proto" --type "PROTOBUF"
-AddSchemaToRegistry --name "ws-cluster-1-local-write-v1-value" --schema-file "${SCRIPT_DIR}/WsSchema.proto" --type "PROTOBUF"
-AddSchemaToRegistry --name "ws-cluster-2-local-write-v1-value" --schema-file "${SCRIPT_DIR}/WsSchema.proto" --type "PROTOBUF"
-AddSchemaToRegistry --name "ws-cluster-2-local-read-v1-value" --schema-file "${SCRIPT_DIR}/WsSchema.proto" --type "PROTOBUF"
+FILE="${SCRIPT_DIR}/WsSchema.proto"
+TYPE="PROTOBUF"
+AddSchemaToRegistry --name "ws-cluster-1-local-read-v1-value" --schema-file "${FILE}" --type "${TYPE}"
+AddSchemaToRegistry --name "ws-cluster-1-local-write-v1-value" --schema-file "${FILE}" --type "${TYPE}"
+AddSchemaToRegistry --name "ws-cluster-2-local-write-v1-value" --schema-file "${FILE}" --type "${TYPE}"
+AddSchemaToRegistry --name "ws-cluster-2-local-read-v1-value" --schema-file "${FILE}" --type "${TYPE}"

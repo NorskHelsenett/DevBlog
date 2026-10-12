@@ -162,7 +162,7 @@ public class OutboxStateInSqLiteService : IOutboxStateService
         command.CommandText =
         @"
             CREATE TABLE IF NOT EXISTS keyValueOutboxStore (
-                id INTEGER PRIMARY KEY AUTOINCREMENT
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 kvKey BLOB NOT NULL,
                 kvValue BLOB NULL,
                 correlationId TEXT NOT NULL

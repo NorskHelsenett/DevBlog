@@ -6,4 +6,7 @@ docker push localhost:5001/topiccopier:latest
 docker build -t localhost:5001/resilientservice:latest "${SCRIPT_DIR}/ResilientMicroservice" && \
 docker push localhost:5001/resilientservice:latest
 
+docker build -t localhost:5001/workshop-api:latest "${SCRIPT_DIR}/DistributedKvEngine" && \
+docker push localhost:5001/workshop-api:latest
+
 helm template "${SCRIPT_DIR}/helm/WorkshopChart" | kubectl apply -f -

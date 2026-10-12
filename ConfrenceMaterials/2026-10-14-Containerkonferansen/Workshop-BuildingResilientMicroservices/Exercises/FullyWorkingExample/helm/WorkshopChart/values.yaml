@@ -1,5 +1,67 @@
 resilientMicroservice:
-  todo: "Other things"
+  namespace: "workshop"
+  image: "localhost:5001/workshop-api:latest"
+  schemaRegistryAddress: "http://schema-registry-app-service.kafka.svc.cluster.local:8080/apis/ccompat/v7"
+  auth:
+    disabled: "true"
+    idpAddress:
+      backend: ""
+      users: ""
+    security:
+      validateExternalCerts: ""
+      requireHttpsMetadata: ""
+    tokenAudience: ""
+    oidc:
+      endpoints: {}
+  outbox:
+    delay:
+      emptyQueueMs: 200
+      errorMs: 2000
+  instances:
+    - name: a1
+      kafka:
+        bootstrap: ws-kafka-cluster-mtls-kafka-bootstrap.kafka.svc.cluster.local:9093
+        truststoreSecretName: "cluster-1-truststore"
+        userSecretName: "cluster-1-workshop-api-user-secret"
+      topics:
+        write: ws-cluster-1-local-write-v1
+        read:  ws-cluster-1-local-read-v1
+      hostnames:
+        - workshop-api-a1.localhost.nhn.no
+        - workshop-api-a1.localho.st
+    - name: a2
+      kafka:
+        bootstrap: ws-kafka-cluster-mtls-kafka-bootstrap.kafka.svc.cluster.local:9093
+        truststoreSecretName: "cluster-1-truststore"
+        userSecretName: "cluster-1-workshop-api-user-secret"
+      topics:
+        write: ws-cluster-1-local-write-v1
+        read:  ws-cluster-1-local-read-v1
+      hostnames:
+        - workshop-api-a2.localhost.nhn.no
+        - workshop-api-a2.localho.st
+    - name: b1
+      kafka:
+        bootstrap: kafka-cluster-mtls-second-kafka-bootstrap.kafka.svc.cluster.local:10893
+        truststoreSecretName: "cluster-2-truststore"
+        userSecretName: "cluster-2-workshop-api-user-secret"
+      topics:
+        write: ws-cluster-2-local-write-v1
+        read:  ws-cluster-2-local-read-v1
+      hostnames:
+        - workshop-api-b1.localhost.nhn.no
+        - workshop-api-b1.localho.st
+    - name: b2
+      kafka:
+        bootstrap: kafka-cluster-mtls-second-kafka-bootstrap.kafka.svc.cluster.local:10893
+        truststoreSecretName: "cluster-2-truststore"
+        userSecretName: "cluster-2-workshop-api-user-secret"
+      topics:
+        write: ws-cluster-2-local-write-v1
+        read:  ws-cluster-2-local-read-v1
+      hostnames:
+        - workshop-api-b2.localhost.nhn.no
+        - workshop-api-b2.localho.st
 topicCopiers:
   namespace: "workshop"
   image: "localhost:5001/topiccopier:latest"

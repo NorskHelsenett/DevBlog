@@ -1,12 +1,7 @@
 syntax = "proto3";
 
-message PersonName{
-    string Given = 1;
-    string Family = 2;
-}
+package Workshop;
 
-message Person {
-    string Id = 1;
-    .PersonName Name = 2;
-    repeated string Tags = 3;
+message ByteArrayMessage {
+  bytes value = 1;
 }

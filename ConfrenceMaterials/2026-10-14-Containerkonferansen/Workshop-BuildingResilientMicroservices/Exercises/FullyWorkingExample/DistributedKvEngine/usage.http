@@ -1,11 +1,11 @@
-@baseurl=http://localhost:8080
+@baseurl=http://workshop-api-a1.localho.st:8080
 GET {{baseurl}} HTTP/1.1
 
 ### Retrieve user access token of type bearer from keycloak
 
 # # @name userTokenRequest
 # curl --request POST \
-#  --url "http://localhost:8088/realms/demo-realm/protocol/openid-connect/token" \
+#  --url "http://keycloak.localho.st:8080/realms/demo-realm/protocol/openid-connect/token" \
 #  --header "Content-Type: application/x-www-form-urlencoded" \
 #  --data client_id=demo-client \
 #  --data username=user \
@@ -16,7 +16,7 @@ GET {{baseurl}} HTTP/1.1
 ### Retrieve user access token of type bearer from keycloak
 
 # @name userTokenRequest
-POST http://localhost:8088/realms/demo-realm/protocol/openid-connect/token
+POST http://keycloak.localho.st:8080/realms/demo-realm/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
 client_id=demo-client
@@ -29,7 +29,7 @@ client_id=demo-client
 ### Retrieve client (service account) token
 
 # @name clientTokenRequest
-POST http://localhost:8088/realms/demo-realm/protocol/openid-connect/token
+POST http://keycloak.localho.st:8080/realms/demo-realm/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
 client_id=demo-client

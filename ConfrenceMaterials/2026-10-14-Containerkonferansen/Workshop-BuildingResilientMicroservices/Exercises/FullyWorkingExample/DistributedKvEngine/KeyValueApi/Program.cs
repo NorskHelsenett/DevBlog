@@ -60,6 +60,9 @@ if(readEnabled)
             builder.Services.AddSingleton<IKeyValueStateService, KeyValueStateInSQLiteService>();
             break;
     }
+
+    builder.Services.AddSingleton<IInboxStateService, InboxStateInSQLiteService>();
+    builder.Services.AddHostedService<InboxProcessor>();
     builder.Services.AddHostedService<KafkaConsumerService>();
 }
 else
@@ -77,6 +80,7 @@ else
     logger.LogInformation($"Environment variable {KV_API_DISABLE_WRITE} set to true, not setting up write services and endpoints");
 }
 
+SQLitePCL.Batteries.Init();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

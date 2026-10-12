@@ -5,16 +5,18 @@ public class KafkaConsumerService : BackgroundService
 {
     private readonly ILogger<KafkaConsumerService> _logger;
     private readonly IKeyValueStateService _keyValueStateService;
+    private readonly IInboxStateService _inbox;
     private readonly KafkaAdminClient _kafkaAdminClient;
     private readonly CachedSchemaRegistryClient _schemaRegistryClient;
     private readonly KafkaTopic _topic;
     private readonly Func<byte[], byte[]> _decrypt;
     private readonly Func<string, string> _decryptHeaderKey;
 
-    public KafkaConsumerService(ILogger<KafkaConsumerService> logger, IKeyValueStateService keyValueStateService, KafkaAdminClient kafkaAdminClient)
+    public KafkaConsumerService(ILogger<KafkaConsumerService> logger, IKeyValueStateService keyValueStateService, IInboxStateService inbox, KafkaAdminClient kafkaAdminClient)
     {
         _logger = logger;
         _keyValueStateService = keyValueStateService;
+        _inbox = inbox;
         _kafkaAdminClient = kafkaAdminClient;
         if (Environment.GetEnvironmentVariable(KV_API_ENCRYPT_DATA_ON_KAFKA) == "true")
         {
@@ -94,17 +96,30 @@ public class KafkaConsumerService : BackgroundService
                     var correlationIdFromHeader = string.Empty;
                     if(result.Message.Headers.TryGetLastBytes("Correlation-Id", out byte[] correlationIdHeaderValue)) correlationIdFromHeader = System.Text.Encoding.UTF8.GetString(correlationIdHeaderValue);
                     _logger.LogTrace($"The next event on topic {result.TopicPartitionOffset.Topic} partition {result.TopicPartitionOffset.Partition.Value} offset {result.TopicPartitionOffset.Offset.Value} received to the topic at the time {result.Message.Timestamp.UtcDateTime:o} has correlation ID \"{correlationIdFromHeader}\"");
-                    if(result.Message.Value == null)
-                    {
-                        var key = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
-                        _keyValueStateService.Remove(key, correlationIdFromHeader);
-                    }
-                    else
-                    {
-                        var key = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
-                        var value = _decrypt(handleSchemaMagicBytesInValue(result.Message.Value));
-                        _keyValueStateService.Store(key, value, correlationIdFromHeader);
-                    }
+                    // if(result.Message.Value == null)
+                    // {
+                    //     var key = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
+                    //     _keyValueStateService.Remove(key, correlationIdFromHeader);
+                    // }
+                    // else
+                    // {
+                    //     var key = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
+                    //     var value = _decrypt(handleSchemaMagicBytesInValue(result.Message.Value));
+                    //     _keyValueStateService.Store(key, value, correlationIdFromHeader);
+                    // }
+                    var key   = _decrypt(handleSchemaMagicBytesInKey(result.Message.Key));
+                    var value = result.Message.Value == null
+                        ? null
+                        : _decrypt(handleSchemaMagicBytesInValue(result.Message.Value));
+
+                    _inbox.Enqueue(
+                        key,
+                        value,
+                        correlationIdFromHeader,
+                        result.Topic,
+                        result.Partition.Value,
+                        result.Offset.Value,
+                        result.Message.Timestamp.UtcDateTime);
                     _keyValueStateService.UpdateLastConsumedTopicPartitionOffsets(new KafkaTopicPartitionOffset
                         {
                             Topic = new KafkaTopic { Value = result.Topic },

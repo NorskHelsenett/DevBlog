@@ -10,7 +10,8 @@
     <PackageReference Include="Confluent.Kafka" Version="2.16.0" />
     <PackageReference Include="Confluent.SchemaRegistry" Version="2.16.0" />
     <PackageReference Include="Confluent.SchemaRegistry.Serdes.Json" Version="2.16.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite.Core" Version="10.0.12" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.12" />
+
     <PackageReference Include="System.IO.Hashing" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
