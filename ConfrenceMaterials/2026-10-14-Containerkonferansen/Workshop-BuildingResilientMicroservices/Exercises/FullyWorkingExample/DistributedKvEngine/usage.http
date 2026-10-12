@@ -1,0 +1,159 @@
+@baseurl=http://localhost:8080
+GET {{baseurl}} HTTP/1.1
+
+### Retrieve user access token of type bearer from keycloak
+
+# # @name userTokenRequest
+# curl --request POST \
+#  --url "http://localhost:8088/realms/demo-realm/protocol/openid-connect/token" \
+#  --header "Content-Type: application/x-www-form-urlencoded" \
+#  --data client_id=demo-client \
+#  --data username=user \
+#  --data password=password \
+#  --data realm=demo-realm \
+#  --data grant_type=password
+
+### Retrieve user access token of type bearer from keycloak
+
+# @name userTokenRequest
+POST http://localhost:8088/realms/demo-realm/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+client_id=demo-client
+&client_secret=demo-client-secret
+&username=user
+&password=password
+&realm=demo-realm
+&grant_type=password
+
+### Retrieve client (service account) token
+
+# @name clientTokenRequest
+POST http://localhost:8088/realms/demo-realm/protocol/openid-connect/token
+Content-Type: application/x-www-form-urlencoded
+
+client_id=demo-client
+&client_secret=demo-client-secret
+&realm=demo-realm
+&grant_type=client_credentials
+
+###
+
+@authToken = {{userTokenRequest.response.body.access_token}}
+# @authToken = {{clientTokenRequest.response.body.access_token}}
+
+###
+
+POST {{baseurl}}/store
+Content-Type: application/json
+Authorization: Bearer {{authToken}}
+X-Correlation-Id: submitting correlation id should be optional
+
+{
+    "Key": "my first key!",
+    "Value": "the very bestest first value",
+    "Headers": {
+        "these": "first value",
+        "values": "2nd value",
+        "should": "moaar",
+        "be": "I can has value?",
+        "optional": "truely"
+    }
+}
+
+###
+
+POST {{baseurl}}/store
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "meny",
+    "Value": "Using crc32 'meny' should collide with 'menthols'"
+}
+
+###
+
+POST {{baseurl}}/store
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "menthols",
+    "Value": "Using crc32 'menthols' should collide with 'meny'"
+}
+
+###
+
+POST {{baseurl}}/retrieve
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+X-Correlation-Id: nah
+
+{
+    "Key": "my first key!"
+}
+
+###
+
+POST {{baseurl}}/retrieve
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "meny"
+}
+
+###
+
+POST {{baseurl}}/retrieve
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "menthols"
+}
+
+###
+
+POST {{baseurl}}/remove
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "my first key!"
+}
+
+###
+
+POST {{baseurl}}/remove
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "meny"
+}
+
+###
+
+POST {{baseurl}}/remove
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+    "Key": "menthols"
+}
+
+###
+
+GET {{baseurl}}/healthz/ready
+
+###
+
+GET {{baseurl}}/healthz/live
+
+###
+
+GET {{baseurl}}/healthz
+
+###

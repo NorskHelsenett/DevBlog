@@ -1,0 +1,329 @@
+# Relies on the baseline docker compose at ../docker-compose.yml having started first (don't add required services here unless you want to wait for stuff to restart everytime you take the app down and up again to iterate).
+# Future work: Add multiple instances (because seeing is believing).
+
+networks:
+  apps_network:
+    name: apps_network
+    external: true
+
+services:
+  key-value-api:
+    image: localhost/key-value-api
+    container_name: key-value-api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - "8080:8080"
+    healthcheck:
+      # Can be commented out to use the check embedded in the image. However, due to how compose works, checking for if we are ready is what we want
+      test: [ "CMD", "dotnet", "/HealthChecker/HealthChecker.dll", "--", "http://localhost:8080/healthz/ready" ]
+      start_period: "5s"
+      interval: "5s"
+      timeout: "1s"
+      retries: 20
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData/Kafka/aes_key.txt:/kafka/secrets/aes_key.txt
+      - ../ContainerData/KeyValueApi/Instance0:/ContainerData
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+      ASPNETCORE_DETAILEDERRORS: "true"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      # kafkal client config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+
+      # Consumer config
+      KAFKA_GROUP_ID: "key-value-api-instance-0"
+      KAFKA_ENABLE_AUTO_COMMIT: "true"
+      KAFKA_AUTO_COMMIT_INTERVAL_MS: "200"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # Schema registry config
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+
+      # KvApi config
+      KV_API_KAFKA_KEY_VALUE_TOPIC: "key-value-store"
+
+      KV_API_DISABLE_WRITE: "false"
+      KV_API_DISABLE_READ: "false"
+
+      # Store to in memory dictionary options
+      # KV_API_STATE_STORAGE_TYPE: "dict"
+
+      # Store to local disk options
+      # KV_API_STATE_STORAGE_TYPE: "disk"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+
+      # SQLite settings
+      KV_API_STATE_STORAGE_TYPE: "sqlite"
+      KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/kvApi.sqlite"
+      # KV_API_STATE_STORAGE_SQLITE_PASSWORD: "password"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/"
+
+      # Encryption settings
+      # KV_API_AES_KEY: "513925caed8f4774d04d1013bef95cdb37d4f78a01965f25390da8ad9b6da15a"
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "true" # This is safe
+      # KV_API_AES_KEY_LOCATION: /kafka/secrets/aes_key.txt
+
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "false"
+
+      # KV_API_DISABLE_API_AUTH: "true"
+      OIDC_IDP_ADDRESS_FOR_SERVER: "http://keycloak:8088/realms/demo-realm"
+      OIDC_IDP_ADDRESS_FOR_USERS: "http://localhost:8088/realms/demo-realm"
+      OIDC_REQUIRE_HTTPS_METADATA: "false"
+      OIDC_AUDIENCE: "account"
+      OIDC_HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES: "false"
+      # Optional overrides
+      # OIDC_AUTHORIZATION_ENDPOINT: "http://localhost:8088/realms/demo-realm/protocol/openid-connect/auth"
+      # OIDC_TOKEN_ENDPOINT: "http://keycloak:8088/realms/demo-realm/protprotocol/openid-connect/token"
+      # OIDC_JWKS_URI: "http://keycloak:8088/realms/demo-realm/protocol/openid-connect/certs"
+      # OIDC_END_SESSION_ENDPOINT: "http://localhost:8088/realms/demo-realm/protocol/openid-connect/logout"
+
+
+  key-value-api-second-instance:
+    image: localhost/key-value-api
+    container_name: key-value-api-second-instance
+    profiles:
+      - multiinstance
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - "8001:8080"
+    healthcheck:
+      test: [ "CMD", "dotnet", "/HealthChecker/HealthChecker.dll", "--", "http://localhost:8080/healthz/ready" ]
+      start_period: "5s"
+      interval: "5s"
+      timeout: "1s"
+      retries: 20
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData/Kafka/aes_key.txt:/kafka/secrets/aes_key.txt
+      - ../ContainerData/KeyValueApi/Instance1:/ContainerData
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      # kafkal client config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+
+      # Consumer config
+      KAFKA_GROUP_ID: "key-value-api-instance-1"
+      KAFKA_ENABLE_AUTO_COMMIT: "true"
+      KAFKA_AUTO_COMMIT_INTERVAL_MS: "200"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # Schema registry config
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+
+      # KvApi config
+      KV_API_KAFKA_KEY_VALUE_TOPIC: "key-value-store"
+
+      KV_API_DISABLE_WRITE: "false"
+      KV_API_DISABLE_READ: "false"
+
+      # Store to in memory dictionary options
+      KV_API_STATE_STORAGE_TYPE: "dict"
+
+      # Store to local disk options
+      # KV_API_STATE_STORAGE_TYPE: "disk"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+
+      # SQLite settings
+      # KV_API_STATE_STORAGE_TYPE: "sqlite"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/kvApi.sqlite"
+      # KV_API_STATE_STORAGE_SQLITE_PASSWORD: "password"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/"
+
+      # Encryption settings
+      # KV_API_AES_KEY: "513925caed8f4774d04d1013bef95cdb37d4f78a01965f25390da8ad9b6da15a"
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "true" # This is safe
+      # KV_API_AES_KEY_LOCATION: /kafka/secrets/aes_key.txt
+
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "false"
+
+  key-value-api-third-instance:
+    image: localhost/key-value-api
+    container_name: key-value-api-third-instance
+    profiles:
+      - multiinstance
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - "8002:8080"
+    healthcheck:
+      test: [ "CMD", "dotnet", "/HealthChecker/HealthChecker.dll", "--", "http://localhost:8080/healthz/ready" ]
+      start_period: "5s"
+      interval: "5s"
+      timeout: "1s"
+      retries: 20
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData/Kafka/aes_key.txt:/kafka/secrets/aes_key.txt
+      - ../ContainerData/KeyValueApi/Instance2:/ContainerData
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      # kafkal client config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+
+      # Consumer config
+      KAFKA_GROUP_ID: "key-value-api-instance-2"
+      KAFKA_ENABLE_AUTO_COMMIT: "true"
+      KAFKA_AUTO_COMMIT_INTERVAL_MS: "200"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # Schema registry config
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+
+      # KvApi config
+      KV_API_KAFKA_KEY_VALUE_TOPIC: "key-value-store"
+
+      KV_API_DISABLE_WRITE: "false"
+      KV_API_DISABLE_READ: "false"
+
+      # Store to in memory dictionary options
+      # KV_API_STATE_STORAGE_TYPE: "dict"
+
+      # Store to local disk options
+      KV_API_STATE_STORAGE_TYPE: "disk"
+      KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+
+      # SQLite settings
+      # KV_API_STATE_STORAGE_TYPE: "sqlite"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/kvApi.sqlite"
+      # KV_API_STATE_STORAGE_SQLITE_PASSWORD: "password"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/"
+
+      # Encryption settings
+      # KV_API_AES_KEY: "513925caed8f4774d04d1013bef95cdb37d4f78a01965f25390da8ad9b6da15a"
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "true" # This is safe
+      # KV_API_AES_KEY_LOCATION: /kafka/secrets/aes_key.txt
+
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "false"
+
+  key-value-api-fourth-instance:
+    image: localhost/key-value-api
+    container_name: key-value-api-fourth-instance
+    profiles:
+      - multiinstance
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: 1000:1001
+    networks:
+      - apps_network
+    ports:
+      - "8003:8080"
+    healthcheck:
+      test: [ "CMD", "dotnet", "/HealthChecker/HealthChecker.dll", "--", "http://localhost:8080/healthz/ready" ]
+      start_period: "5s"
+      interval: "5s"
+      timeout: "1s"
+      retries: 20
+    volumes:
+      - ../ContainerData/GeneratedCerts/Kafka/Users/admin:/kafka/secrets
+      - ../ContainerData/Kafka/aes_key.txt:/kafka/secrets/aes_key.txt
+      - ../ContainerData/KeyValueApi/Instance3:/ContainerData
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ASPNETCORE_URLS: "http://+:8080"
+
+      # LOGGING__LOGLEVEL__DEFAULT: "Information"
+      LOGGING__LOGLEVEL__DEFAULT: "Trace"
+      LOGGING__LOGLEVEL__MICROSOFT: "Warning"
+      LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION: "Error"
+
+      # kafkal client config
+      KAFKA_BOOTSTRAP_SERVERS: "broker1:9092,broker2:9092,broker3:9092"
+      KAFKA_SECURITY_PROTOCOL: "ssl"
+      KAFKA_SSL_CA_PEM_LOCATION: "/kafka/secrets/ca.crt"
+      KAFKA_SSL_CERTIFICATE_LOCATION: "/kafka/secrets/acl-principal.crt"
+      KAFKA_SSL_KEY_LOCATION: "/kafka/secrets/acl-principal.key"
+      KAFKA_SSL_KEY_PASSWORD_LOCATION: "/kafka/secrets/password.txt"
+      KAFKA_ACKS: "all"
+
+      # Consumer config
+      KAFKA_GROUP_ID: "key-value-api-instance-3"
+      KAFKA_ENABLE_AUTO_COMMIT: "true"
+      KAFKA_AUTO_COMMIT_INTERVAL_MS: "200"
+      KAFKA_AUTO_OFFSET_RESET: "Earliest"
+
+      # Schema registry config
+      KAFKA_SCHEMA_REGISTRY_URL: "http://schema-registry:8080/apis/ccompat/v7"
+
+      # KvApi config
+      KV_API_KAFKA_KEY_VALUE_TOPIC: "key-value-store"
+
+      KV_API_DISABLE_WRITE: "false"
+      KV_API_DISABLE_READ: "false"
+
+      # Store to in memory dictionary options
+      # KV_API_STATE_STORAGE_TYPE: "dict"
+
+      # Store to local disk options
+      # KV_API_STATE_STORAGE_TYPE: "disk"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+
+      # SQLite settings
+      KV_API_STATE_STORAGE_TYPE: "sqlite"
+      KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/kvApi.sqlite"
+      KV_API_STATE_STORAGE_SQLITE_PASSWORD: "password"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState"
+      # KV_API_STATE_STORAGE_DISK_LOCATION: "/ContainerData/LocalState/"
+
+      # Encryption settings
+      # KV_API_AES_KEY: "513925caed8f4774d04d1013bef95cdb37d4f78a01965f25390da8ad9b6da15a"
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "true" # This is safe
+      # KV_API_AES_KEY_LOCATION: /kafka/secrets/aes_key.txt
+
+      # KV_API_ENCRYPT_DATA_ON_KAFKA: "false"
