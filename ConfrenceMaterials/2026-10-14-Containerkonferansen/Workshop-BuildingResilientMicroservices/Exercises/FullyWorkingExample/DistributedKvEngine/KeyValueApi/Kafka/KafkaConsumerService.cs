@@ -88,9 +88,16 @@ public class KafkaConsumerService : BackgroundService
                     _logger.LogTrace($"The next event on topic {result.TopicPartitionOffset.Topic} partition {result.TopicPartitionOffset.Partition.Value} offset {result.TopicPartitionOffset.Offset.Value} received to the topic at the time {result.Message.Timestamp.UtcDateTime:o} has correlation ID \"{correlationIdFromHeader}\"");
 
                     var key = _decrypt(result.Message.Key);
-                    var value = result.Message.Value == null
-                        ? null
-                        : _decrypt(result.Message.Value.ToByteArray());
+                    // var value = result.Message.Value == null
+                    //     ? null
+                    //     : _decrypt(result.Message.Value.Value.ToByteArray());
+                    byte[]? value = null;
+                    if (result.Message.Value != null)
+                    {
+                        var protoEnvelope = result.Message.Value;
+                        var protoPayload = protoEnvelope.Value;
+                        value = _decrypt(protoPayload.ToByteArray());
+                    }
 
                     _inbox.Enqueue(
                         key,
