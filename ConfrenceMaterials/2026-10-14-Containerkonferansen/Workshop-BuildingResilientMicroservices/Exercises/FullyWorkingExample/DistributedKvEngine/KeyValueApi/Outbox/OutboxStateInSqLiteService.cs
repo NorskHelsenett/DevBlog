@@ -39,64 +39,67 @@ public class OutboxStateInSqLiteService : IOutboxStateService
             VALUES ($k, $v, $c);
         ";
         command.Parameters.AddWithValue("$k", key);
-        command.Parameters.AddWithValue("$v", value);
+        // command.Parameters.AddWithValue("$v", value);
+        // var vParam = command.Parameters.Add("$v", SqliteType.Blob);
+        // vParam.Value = (object?)value ?? DBNull.Value;
+        command.Parameters.AddWithValue("$v", (object?)value ?? DBNull.Value);
         command.Parameters.AddWithValue("$c", correlationId.Value);
         var rowsAffected = command.ExecuteNonQuery();
 
         return rowsAffected == 1;
     }
 
-    public bool TryRetrieveNext(out (byte[] Key, byte[]? Value, Dictionary<string,byte[]>? Headers, CorrelationId CorrelationId) result)
+    public bool TryRetrieveNext(
+        out (byte[] Key,
+             byte[]? Value,
+             Dictionary<string, byte[]>? Headers,
+             CorrelationId CorrelationId) result)
     {
-        var command = _sqliteDb.CreateCommand();
-        command.CommandText =
-        @"
+        using var cmd = _sqliteDb.CreateCommand();
+        cmd.CommandText = @"
             SELECT kvKey, kvValue, correlationId
             FROM keyValueOutboxStore
-            ORDER  BY id ASC
+            ORDER BY id ASC
             LIMIT 1;
         ";
 
-        using (var reader = command.ExecuteReader())
+        using var reader = cmd.ExecuteReader();
+
+        if (!reader.Read())
         {
-            while (reader.Read())
-            {
-                var keyRaw = reader.GetStream(0);
-                var valueRaw = reader.GetStream(1);
-                var correlationIdRaw = reader.GetString(2);
-
-                byte[] keyConverted;
-                if(keyRaw is MemoryStream keyStream)
-                {
-                    keyConverted = keyStream.ToArray();
-                }
-                else
-                {
-                    using MemoryStream ms = new();
-                    valueRaw.CopyTo(ms);
-                    keyConverted = ms.ToArray();
-                }
-
-                byte[]? valueConverted;
-                if(valueRaw is MemoryStream stream)
-                {
-                    valueConverted = stream.ToArray();
-                }
-                else
-                {
-                    using MemoryStream ms = new();
-                    valueRaw.CopyTo(ms);
-                    valueConverted = ms.ToArray();
-                }
-
-                var correlationIdConverted = new CorrelationId { Value = correlationIdRaw };
-
-                result = (Key: keyConverted, Value: valueConverted, Headers: null, CorrelationId: correlationIdConverted);
-                return true;
-            }
+            // No rows at all – return a “not‑found” tuple.
+            result = (Key: Array.Empty<byte>(),
+                      Value: null,
+                      Headers: null,
+                      CorrelationId: new CorrelationId { Value = string.Empty });
+            return false;
         }
-        result = (Key: [], Value: [], Headers: null, CorrelationId: new CorrelationId { Value = string.Empty });
-        return false;
+
+        static byte[] ReadBlob(SqliteDataReader r, int ordinal)
+        {
+            // The column is guaranteed NOT NULL when we call this helper.
+            using var stream = r.GetStream(ordinal);
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            return ms.ToArray();
+        }
+
+        byte[] key = ReadBlob(reader, 0);
+
+        byte[]? value = null;
+        if (!reader.IsDBNull(1))
+        {
+            value = ReadBlob(reader, 1);
+        }
+
+        string correlationIdText = reader.GetString(2);
+        var correlationId = new CorrelationId { Value = correlationIdText };
+
+        result = (Key: key,
+                  Value: value,
+                  Headers: null,
+                  CorrelationId: correlationId);
+        return true;
     }
 
     private string GetSqliteConnectionString()
