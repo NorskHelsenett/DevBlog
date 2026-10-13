@@ -1,7 +1,5 @@
-# networks:
-#   apps_network:
-#     name: apps_network
-#     external: true
+# Example of how you can run code outside the cluster, for instance in your IDE for debug, and access the kafka resources within the cluster.
+# Note the mount of the extracted secrets from ../Infrastructure/credentials/kafka .
 
 services:
   state-distributor:
