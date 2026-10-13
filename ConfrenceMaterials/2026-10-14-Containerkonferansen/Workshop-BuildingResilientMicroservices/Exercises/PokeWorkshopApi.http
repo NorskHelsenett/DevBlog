@@ -1,11 +1,25 @@
 @baseurl=http://workshop-api-a1.localho.st:8080
-GET {{baseurl}} HTTP/1.1
+@idp=http://keycloak.localho.st:8080/realms/workshop
+@tokenEndpoint={{idp}}/protocol/openid-connect/token
+# GET {{baseurl}} HTTP/1.1
+
+###
+
+GET {{baseurl}}/healthz/ready
+
+###
+
+GET {{baseurl}}/healthz/live
+
+###
+
+GET {{baseurl}}/healthz
 
 ### Retrieve user access token of type bearer from keycloak
 
 # # @name userTokenRequest
 # curl --request POST \
-#  --url "http://keycloak.localho.st:8080/realms/workshop/protocol/openid-connect/token" \
+#  --url "{{tokenEndpoint}}" \
 #  --header "Content-Type: application/x-www-form-urlencoded" \
 #  --data client_id=workshop-client \
 #  --data username=user \
@@ -16,7 +30,7 @@ GET {{baseurl}} HTTP/1.1
 ### Retrieve user access token of type bearer from keycloak
 
 # @name userTokenRequest
-POST http://keycloak.localho.st:8080/realms/workshop/protocol/openid-connect/token
+POST {{tokenEndpoint}}
 Content-Type: application/x-www-form-urlencoded
 
 client_id=workshop-client
@@ -29,7 +43,7 @@ client_id=workshop-client
 ### Retrieve client (service account) token
 
 # @name clientTokenRequest
-POST http://keycloak.localho.st:8080/realms/workshop/protocol/openid-connect/token
+POST {{tokenEndpoint}}
 Content-Type: application/x-www-form-urlencoded
 
 client_id=workshop-client
@@ -147,14 +161,3 @@ Content-Type: application/json
 
 ###
 
-GET {{baseurl}}/healthz/ready
-
-###
-
-GET {{baseurl}}/healthz/live
-
-###
-
-GET {{baseurl}}/healthz
-
-###
