@@ -7,19 +7,13 @@ services:
     container_name: state-distributor
     build:
       context: ./FullyWorkingExample/ResilientMicroservice
-      # context: ./Exercise1-ReceiveAndProduce
-      # context: ./Exercise2-ConsumeAndMakeAvailable
-      # context: ./Exercise3-ResumeWhenRestarted
       dockerfile: Dockerfile
     user: 1000:1001
     network_mode: "host"
-    # networks:
-    #   - apps_network
     ports:
       - "4321:4321"
     volumes:
       - ../Infrastructure/credentials/kafka:/kafka/secrets
-      # - ../../ContainerData:/ContainerData
     tmpfs:
       - /ContainerData
     environment:
