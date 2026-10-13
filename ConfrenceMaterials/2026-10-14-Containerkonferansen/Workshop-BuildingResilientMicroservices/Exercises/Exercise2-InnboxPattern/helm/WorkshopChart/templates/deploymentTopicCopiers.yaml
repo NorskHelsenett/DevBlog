@@ -1,0 +1,94 @@
+{{- range $cfg := .Values.topicCopiers.copyWorkers }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $cfg.name }}
+  namespace: {{ $.Values.topicCopiers.namespace }}
+  labels:
+    app.kubernetes.io/name: topic-copier
+    app.kubernetes.io/instance: {{ $cfg.name }}
+spec:
+  replicas: {{ $cfg.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: topic-copier
+      app.kubernetes.io/instance: {{ $cfg.name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: topic-copier
+        app.kubernetes.io/instance: {{ $cfg.name }}
+    spec:
+      containers:
+        - name: "topic-copier-worker"
+          image: {{ $.Values.topicCopiers.image | quote}}
+          imagePullPolicy: "Always" #IfNotPresent # In workshop setting, always take our newest even if tag is reused
+          env:
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "8080"
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Development"
+
+            - name: KafkaConfigSource__BootstrapServers
+              value: {{ $cfg.kafkaSettings.source.bootstrap | quote}}
+            - name: KafkaConfigSource__OriginalTopicHasSchema
+              value: {{ $cfg.kafkaSettings.source.hasSchema | quote}}
+            - name: KafkaConfigSource__SourceTopic
+              value: {{ $cfg.kafkaSettings.source.topic | quote}}
+            - name: KafkaConfigSource__GroupId
+              value: {{ $cfg.kafkaSettings.source.groupId | quote}}
+            - name: KafkaConfigSource__SecurityProtocol
+              value: "ssl"
+            - name: KafkaConfigSource__SslKeyPemLocation
+              value: "/kafka/secrets/source/user.key"
+            - name: KafkaConfigSource__SslCaPemLocation
+              value: "/kafka/secrets/source/cluster-ca.crt"
+            - name: KafkaConfigSource__SslCertificatePemLocation
+              value: "/kafka/secrets/source/user.crt"
+            - name: KafkaConfigSource__SslKeyPasswordLocation
+              value: "/kafka/secrets/source/user.password"
+            - name: KafkaConfigSource__MaxMessageBytes
+              value: "1048588"
+
+            - name: KafkaConfigDestination__BootstrapServers
+              value: {{ $cfg.kafkaSettings.destination.bootstrap | quote}}
+            - name: KafkaConfigDestination__SchemaRegistryAddress
+              value: {{ $cfg.kafkaSettings.destination.schemaRegistry | quote}}
+            - name: KafkaConfigDestination__DestinationTopic
+              value: {{ $cfg.kafkaSettings.destination.topic | quote}}
+            - name: KafkaConfigDestination__SecurityProtocol
+              value: "ssl"
+            - name: KafkaConfigDestination__SslKeyPemLocation
+              value: "/kafka/secrets/destination/user.key"
+            - name: KafkaConfigDestination__SslCaPemLocation
+              value: "/kafka/secrets/destination/cluster-ca.crt"
+            - name: KafkaConfigDestination__SslCertificatePemLocation
+              value: "/kafka/secrets/destination/user.crt"
+            - name: KafkaConfigDestination__SslKeyPasswordLocation
+              value: "/kafka/secrets/destination/user.password"
+            - name: KafkaConfigDestination__MaxMessageBytes
+              value: "1048588"
+          volumeMounts:
+            - name: kafka-secrets-source
+              mountPath: "/kafka/secrets/source/"
+              readOnly: true
+            - name: kafka-secrets-destination
+              mountPath: "/kafka/secrets/destination/"
+              readOnly: true
+      volumes:
+        - name: kafka-secrets-source
+          projected:
+            sources:
+              - secret:
+                  name: {{ $cfg.kafkaSettings.source.truststoreSecretName }}
+              - secret:
+                  name: {{ $cfg.kafkaSettings.source.userSecretName }}
+        - name: kafka-secrets-destination
+          projected:
+            sources:
+              - secret:
+                  name: {{ $cfg.kafkaSettings.destination.truststoreSecretName }}
+              - secret:
+                  name: {{ $cfg.kafkaSettings.destination.userSecretName }}
+---
+{{- end }}   # end range

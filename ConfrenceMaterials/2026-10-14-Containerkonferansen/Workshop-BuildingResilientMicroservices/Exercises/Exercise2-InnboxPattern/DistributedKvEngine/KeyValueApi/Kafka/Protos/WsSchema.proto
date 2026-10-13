@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+package Workshop;
+
+option java_package = "namespace.Workshop.v1";
+option csharp_namespace = "Namespace.Workshop.V1";
+
+message ByteArrayMessage {
+  bytes value = 1;
+}

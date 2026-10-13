@@ -1,0 +1,181 @@
+{{- define "workshop-api.fullname" -}}
+{{- printf "%s-%s" "workshop-api-instance" .name | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{- define "workshop-api.servicePort" -}}8080{{- end -}}
+{{- define "workshop-api.containerPort" -}}8080{{- end -}}
+
+{{- range .Values.resilientMicroservice.instances }}
+{{- $inst := . }}
+{{- $fullname := include "workshop-api.fullname" $inst }}
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $.Values.resilientMicroservice.namespace }}
+  labels:
+    app.kubernetes.io/name: workshop-api
+    app.kubernetes.io/instance: {{ $fullname }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: workshop-api
+      app.kubernetes.io/instance: {{ $fullname }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: workshop-api
+        app.kubernetes.io/instance: {{ $fullname }}
+    spec:
+      containers:
+        - name: "workshop-api-worker"
+          image: {{ $.Values.resilientMicroservice.image | quote }}
+          imagePullPolicy: "Always" #IfNotPresent # In workshop setting, always take our newest even if tag is reused
+          env:
+            - name: ASPNETCORE_HTTP_PORTS
+              value: "{{ include "workshop-api.containerPort" . }}"
+            - name: ASPNETCORE_ENVIRONMENT
+              value: Development
+            - name: ASPNETCORE_DETAILEDERRORS
+              value: "true"
+
+            - name: LOGGING__LOGLEVEL__DEFAULT
+              value: Trace
+            - name: LOGGING__LOGLEVEL__MICROSOFT
+              value: Warning
+            - name: LOGGING__LOGLEVEL__MICROSOFT.ASPNETCORE.DATAPROTECTION
+              value: Error
+
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: {{ $inst.kafka.bootstrap }}
+            - name: KAFKA_SECURITY_PROTOCOL
+              value: ssl
+            - name: KAFKA_SSL_CA_PEM_LOCATION
+              value: "/kafka/secrets/cluster-ca.crt"
+            - name: KAFKA_SSL_CERTIFICATE_LOCATION
+              value: "/kafka/secrets/user.crt"
+            - name: KAFKA_SSL_KEY_LOCATION
+              value: "/kafka/secrets/user.key"
+            - name: KAFKA_ACKS
+              value: all
+
+            - name: KAFKA_GROUP_ID
+              value: {{ $fullname }}
+            - name: KAFKA_ENABLE_AUTO_COMMIT
+              value: "true"
+            - name: KAFKA_AUTO_COMMIT_INTERVAL_MS
+              value: "200"
+            - name: KAFKA_AUTO_OFFSET_RESET
+              value: Earliest
+
+            - name: KAFKA_SCHEMA_REGISTRY_URL
+              value: {{ $.Values.resilientMicroservice.schemaRegistryAddress }}
+
+            - name: KV_API_KAFKA_TOPIC_WRITE
+              value: {{ $inst.topics.write }}
+            - name: KV_API_KAFKA_TOPIC_READ
+              value: {{ $inst.topics.read }}
+            - name: KV_API_STATE_STORAGE_TYPE
+              value: "sqlite"
+            - name: KV_API_STATE_STORAGE_DISK_LOCATION
+              value: "/ContainerData/LocalState/"
+            - name: KV_API_OUTBOX_STORAGE_DISK_LOCATION
+              value: "/ContainerData/LocalState/"
+            - name: KV_API_OUTBOX_PROCESSOR_EMPTY_QUEUE_DELAY_MILLISECONDS
+              value: {{ $.Values.resilientMicroservice.outbox.delay.emptyQueueMs | default 200 | quote }}
+            - name: KV_API_OUTBOX_PROCESSOR_ERROR_DELAY_MILLISECONDS
+              value: {{ $.Values.resilientMicroservice.outbox.delay.errorMs | default 2000 | quote }}
+
+            {{/*{{- $aes := $inst.AesKey | default dict }}
+            {{- if $aes.Secret.Name }}
+            - name: KV_API_AES_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $aes.Secret.Name | quote }}
+                  key:  {{ $aes.Secret.Key | default "aesKey" | quote }}
+            {{- end }}*/}}
+
+            - name: KV_API_DISABLE_API_AUTH
+              value: {{ $.Values.resilientMicroservice.auth.disabled | default "false" | quote }}
+            - name: OIDC_IDP_ADDRESS_FOR_SERVER
+              value: {{ $.Values.resilientMicroservice.auth.idpAddress.backend | default "http://todo-backend.example.com/realms/myrealm" | quote }}
+            - name: OIDC_IDP_ADDRESS_FOR_USERS
+              value: {{ $.Values.resilientMicroservice.auth.idpAddress.users | default "http://todo-frontend.example.com/realms/myrealm" | quote }}
+            - name: OIDC_HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES
+              value: {{ $.Values.resilientMicroservice.auth.security.validateExternalCerts | default "true" | quote }}
+            - name: OIDC_REQUIRE_HTTPS_METADATA
+              value: {{ $.Values.resilientMicroservice.auth.security.requireHttpsMetadata | default "true" | quote }}
+            - name: OIDC_AUDIENCE
+              value: {{ $.Values.resilientMicroservice.auth.tokenAudience | default "us" | quote }}
+            # - name: OIDC_AUTHORIZATION_ENDPOINT
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.authorization | default "http://todo.example.com" | quote }}
+            # - name: OIDC_TOKEN_ENDPOINT
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.token | default "http://todo.example.com" | quote }}
+            # - name: OIDC_JWKS_URI
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.jwks | default "http://todo.example.com" | quote }}
+            # - name: OIDC_END_SESSION_ENDPOINT
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.session | default "http://todo.example.com" | quote }}
+
+          volumeMounts:
+            - name: kafka-secrets
+              mountPath: "/kafka/secrets/"
+              readOnly: true
+            - name: sqlite-storage
+              mountPath: "/ContainerData/LocalState/"
+              readOnly: false
+      volumes:
+        - name: kafka-secrets
+          projected:
+            sources:
+              - secret:
+                  name: {{ $inst.kafka.truststoreSecretName | quote }}
+              - secret:
+                  name: {{ $inst.kafka.userSecretName | quote }}
+        - name: sqlite-storage
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullname }}
+  namespace: {{ $.Values.resilientMicroservice.namespace }}
+  labels:
+    app.kubernetes.io/name: workshop-api
+    app.kubernetes.io/instance: {{ $fullname }}
+spec:
+  selector:
+    app.kubernetes.io/name: workshop-api
+    app.kubernetes.io/instance: {{ $fullname }}
+  ports:
+    - name: http
+      protocol: TCP
+      port: {{ include "workshop-api.servicePort" . }}
+      targetPort: {{ include "workshop-api.containerPort" . }}
+  type: ClusterIP
+
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $fullname }}-httproute
+  namespace: {{ $.Values.resilientMicroservice.namespace }}
+spec:
+  parentRefs:
+    - name: ourgateway
+      namespace: networking-gateway
+      kind: Gateway
+  hostnames:
+    {{- range $host := $inst.hostnames }}
+    - {{ $host }}
+    {{- end }}
+  rules:
+    - backendRefs:
+        - name: {{ $fullname }}
+          port: {{ include "workshop-api.servicePort" . }}
+{{- end }}   # end range over instances
