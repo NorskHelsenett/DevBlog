@@ -73,6 +73,12 @@ log 'kubectl -n keycloak get secret kc-bootstrap-admin -o jsonpath="{.data.passw
 log "Test by running:"
 log "curl --request POST --url http://keycloak.localhost.nhn.no:8080/realms/local/protocol/openid-connect/token --header 'Content-Type: application/x-www-form-urlencoded' --data client_id=demo_app --data username=demo-admin --data password=${KC_BS_ADMIN_PW} --data realm=local --data grant_type=password"
 echo "✅ Keycloak is now configured, up, and running!"
+
+"$SCRIPT_DIR/workshop-resources/script-create-ws-realm-and-admin.sh" $VERBOSE_FLAG
+"$SCRIPT_DIR/workshop-resources/script-create-ws-client.sh" $VERBOSE_FLAG
+"$SCRIPT_DIR/workshop-resources/script-create-ws-groups-and-users.sh" $VERBOSE_FLAG
+
+
 # echo "🚪 Create httproute for Keycloak"
 # kubectl apply -f - >/dev/null <<EOF
 # apiVersion: gateway.networking.k8s.io/v1

@@ -33,7 +33,7 @@ spec:
       containers:
         - name: "workshop-api-worker"
           image: {{ $.Values.resilientMicroservice.image | quote }}
-          imagePullPolicy: "Always" #IfNotPresent
+          imagePullPolicy: "Always" #IfNotPresent # In workshop setting, always take our newest even if tag is reused
           env:
             - name: ASPNETCORE_HTTP_PORTS
               value: "{{ include "workshop-api.containerPort" . }}"
@@ -101,23 +101,23 @@ spec:
             - name: KV_API_DISABLE_API_AUTH
               value: {{ $.Values.resilientMicroservice.auth.disabled | default "false" | quote }}
             - name: OIDC_IDP_ADDRESS_FOR_SERVER
-              value: {{ $.Values.resilientMicroservice.auth.idpAddress.backend | default "http://todo.example.com" | quote }}
+              value: {{ $.Values.resilientMicroservice.auth.idpAddress.backend | default "http://todo-backend.example.com/realms/myrealm" | quote }}
             - name: OIDC_IDP_ADDRESS_FOR_USERS
-              value: {{ $.Values.resilientMicroservice.auth.idpAddress.users | default "http://todo.example.com" | quote }}
+              value: {{ $.Values.resilientMicroservice.auth.idpAddress.users | default "http://todo-frontend.example.com/realms/myrealm" | quote }}
             - name: OIDC_HTTPCLIENT_VALIDATE_EXTERNAL_CERTIFICATES
               value: {{ $.Values.resilientMicroservice.auth.security.validateExternalCerts | default "true" | quote }}
             - name: OIDC_REQUIRE_HTTPS_METADATA
               value: {{ $.Values.resilientMicroservice.auth.security.requireHttpsMetadata | default "true" | quote }}
             - name: OIDC_AUDIENCE
               value: {{ $.Values.resilientMicroservice.auth.tokenAudience | default "us" | quote }}
-            - name: OIDC_AUTHORIZATION_ENDPOINT
-              value: {{ $.Values.resilientMicroservice.auth.oidc.endpoints.authorization | default "http://todo.example.com" | quote }}
-            - name: OIDC_TOKEN_ENDPOINT
-              value: {{ $.Values.resilientMicroservice.auth.oidc.endpoints.token | default "http://todo.example.com" | quote }}
-            - name: OIDC_JWKS_URI
-              value: {{ $.Values.resilientMicroservice.auth.oidc.endpoints.jwks | default "http://todo.example.com" | quote }}
-            - name: OIDC_END_SESSION_ENDPOINT
-              value: {{ $.Values.resilientMicroservice.auth.oidc.endpoints.session | default "http://todo.example.com" | quote }}
+            # - name: OIDC_AUTHORIZATION_ENDPOINT
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.authorization | default "http://todo.example.com" | quote }}
+            # - name: OIDC_TOKEN_ENDPOINT
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.token | default "http://todo.example.com" | quote }}
+            # - name: OIDC_JWKS_URI
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.jwks | default "http://todo.example.com" | quote }}
+            # - name: OIDC_END_SESSION_ENDPOINT
+            #   value: {{ $.Values.resilientMicroservice.auth.oidc.endpointOverrides.session | default "http://todo.example.com" | quote }}
 
           volumeMounts:
             - name: kafka-secrets

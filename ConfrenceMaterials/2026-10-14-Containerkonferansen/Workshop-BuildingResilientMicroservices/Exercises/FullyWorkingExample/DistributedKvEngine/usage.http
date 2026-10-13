@@ -5,42 +5,43 @@ GET {{baseurl}} HTTP/1.1
 
 # # @name userTokenRequest
 # curl --request POST \
-#  --url "http://keycloak.localho.st:8080/realms/demo-realm/protocol/openid-connect/token" \
+#  --url "http://keycloak.localho.st:8080/realms/workshop/protocol/openid-connect/token" \
 #  --header "Content-Type: application/x-www-form-urlencoded" \
-#  --data client_id=demo-client \
+#  --data client_id=workshop-client \
 #  --data username=user \
 #  --data password=password \
-#  --data realm=demo-realm \
+#  --data realm=workshop \
 #  --data grant_type=password
 
 ### Retrieve user access token of type bearer from keycloak
 
 # @name userTokenRequest
-POST http://keycloak.localho.st:8080/realms/demo-realm/protocol/openid-connect/token
+POST http://keycloak.localho.st:8080/realms/workshop/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-client_id=demo-client
-&client_secret=demo-client-secret
+client_id=workshop-client
+&client_secret=todo-set-up-ws-client-secret-with-eso-and-retrieve-with-kubectl-here
 &username=user
 &password=password
-&realm=demo-realm
+&realm=workshop
 &grant_type=password
 
 ### Retrieve client (service account) token
 
 # @name clientTokenRequest
-POST http://keycloak.localho.st:8080/realms/demo-realm/protocol/openid-connect/token
+POST http://keycloak.localho.st:8080/realms/workshop/protocol/openid-connect/token
 Content-Type: application/x-www-form-urlencoded
 
-client_id=demo-client
-&client_secret=demo-client-secret
-&realm=demo-realm
+client_id=workshop-client
+&client_secret=todo-set-up-ws-client-secret-with-eso-and-retrieve-with-kubectl-here
+&realm=workshop
 &grant_type=client_credentials
 
 ###
 
 @authToken = {{userTokenRequest.response.body.access_token}}
 # @authToken = {{clientTokenRequest.response.body.access_token}}
+# @authToken = invalid
 
 ###
 

@@ -3,16 +3,16 @@ resilientMicroservice:
   image: "localhost:5001/workshop-api:latest"
   schemaRegistryAddress: "http://schema-registry-app-service.kafka.svc.cluster.local:8080/apis/ccompat/v7"
   auth:
-    disabled: "true"
+    disabled: "false"
     idpAddress:
-      backend: ""
-      users: ""
+      backend: "http://keycloak.keycloak.svc.cluster.local:8080/realms/workshop"
+      users: "http://keycloak.localho.st:8080/realms/workshop"
     security:
-      validateExternalCerts: ""
-      requireHttpsMetadata: ""
-    tokenAudience: ""
+      validateExternalCerts: "false"
+      requireHttpsMetadata: "false"
+    tokenAudience: "account"
     oidc:
-      endpoints: {}
+      endpointOverrides: {}
   outbox:
     delay:
       emptyQueueMs: 200

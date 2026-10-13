@@ -22,7 +22,7 @@ spec:
       containers:
         - name: "topic-copier-worker"
           image: {{ $.Values.topicCopiers.image | quote}}
-          imagePullPolicy: "IfNotPresent"
+          imagePullPolicy: "Always" #IfNotPresent # In workshop setting, always take our newest even if tag is reused
           env:
             - name: ASPNETCORE_HTTP_PORTS
               value: "8080"
