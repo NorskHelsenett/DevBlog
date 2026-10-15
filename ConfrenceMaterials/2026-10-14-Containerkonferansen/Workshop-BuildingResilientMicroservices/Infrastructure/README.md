@@ -17,6 +17,46 @@ Where compose shines for checking that throwing your code into a container works
 Here a local kubernetes cluster is great for verifying the charts and manifests code needed to bootstrap the application code works at all.
 Further, it's very nice to be able to check that the code starts, reports it's health as kubernetes needs, and is scalable in the various ways kubernetes provides for, without having to wait for the CI/CD system and time/space in a shared test cluster.
 
+# Prerequisites
+
+`setup.sh` expects these on your `PATH`: `kind`, `kubectl`, `helm`, `jq`, `curl`, and either docker or podman.
+On macOS: `brew install kind kubectl helm jq`.
+
+# Running with podman
+
+The scripts work with both docker and podman.
+`infra/container-runtime.sh` picks docker when a real docker is installed, otherwise podman (a `docker` that is the podman-docker shim counts as podman).
+Force one or the other with `CONTAINER_RUNTIME`:
+
+```sh
+CONTAINER_RUNTIME=podman ./setup.sh
+CONTAINER_RUNTIME=podman ./teardown.sh
+```
+
+With podman the scripts set `KIND_EXPERIMENTAL_PROVIDER=podman` for kind, so it doesn't end up on a docker that happens to be installed as well.
+
+**The podman machine (macOS/Windows)** needs to be rootful, since the cluster binds host ports 80 and 443, and it needs a lot more resources than the default to run Kafka, Keycloak, ArgoCD and Postgres on three nodes:
+
+```sh
+podman machine init --rootful --cpus 6 --memory 12288
+# or for an existing machine:
+podman machine stop && podman machine set --rootful --cpus 6 --memory 12288 && podman machine start
+```
+
+On Linux, run rootful podman (`sudo`) or set up rootless as described in the [kind rootless docs](https://kind.sigs.k8s.io/docs/user/rootless/), keeping in mind that rootless cannot bind ports below 1024.
+
+**Pushing to the local registry**: podman, unlike docker, does not assume `localhost` registries speak plain http:
+
+```sh
+podman build --tag localhost:5001/my-app:1.0 .
+podman push --tls-verify=false localhost:5001/my-app:1.0
+```
+
+**Restarts**: kind clusters on podman don't survive a `podman machine stop`/`start` reliably.
+If the cluster is dead after a restart, run `./teardown.sh && ./setup.sh`.
+
+The toolbox `Dockerfile` (built on `docker:cli`) assumes a docker socket and is not set up for podman.
+
 # How
 
 Lots of scripts that set up various components.
