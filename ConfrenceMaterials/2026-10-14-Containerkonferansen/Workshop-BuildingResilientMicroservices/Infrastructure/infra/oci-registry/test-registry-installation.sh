@@ -1,9 +1,11 @@
+a="/$0"; a="${a%/*}"; a="${a:-.}"; a="${a##/}/"; SCRIPT_DIR=$(cd "$a"; pwd)
+. "${SCRIPT_DIR}/../container-runtime.sh"
 echo "Pulling test image"
-docker pull gcr.io/google-samples/hello-app:1.0
+${CONTAINER_RUNTIME} pull gcr.io/google-samples/hello-app:1.0
 echo "📝 Retagging test image"
-docker tag gcr.io/google-samples/hello-app:1.0 localhost:5001/hello-app:1.0
+${CONTAINER_RUNTIME} tag gcr.io/google-samples/hello-app:1.0 localhost:5001/hello-app:1.0
 echo "Pushing retagged image to local registry"
-docker push localhost:5001/hello-app:1.0
+${CONTAINER_RUNTIME} push ${REGISTRY_PUSH_FLAGS} localhost:5001/hello-app:1.0
 echo "📝 Creating deployment using image from local registry"
 kubectl create deployment hello-server --image=localhost:5001/hello-app:1.0
 echo "⏳ Waiting for deployment to become ready"

@@ -1,6 +1,8 @@
 # Get scritp dir
 a="/$0"; a="${a%/*}"; a="${a:-.}"; a="${a##/}/"; SCRIPT_DIR=$(cd "$a"; pwd)
 # echo "Script dir: ${SCRIPT_DIR}"
+. "${SCRIPT_DIR}/infra/container-runtime.sh"
+echo "Using container runtime: ${CONTAINER_RUNTIME}"
 # CURRENT_WORK_DIR=$(pwd)
 # echo "PWD: ${CURRENT_WORK_DIR}"
 kind create cluster --config "${SCRIPT_DIR}/infra/kind/kindCluster.yaml"

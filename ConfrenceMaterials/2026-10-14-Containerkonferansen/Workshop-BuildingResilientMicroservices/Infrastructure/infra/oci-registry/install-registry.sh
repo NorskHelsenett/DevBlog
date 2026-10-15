@@ -4,6 +4,7 @@
 # Used for enabling running of locally built images in kind without pushing to external location.
 # Usage:
 # docker build --tag localhost:5001/my-app:1.0 --push .
+# podman build --tag localhost:5001/my-app:1.0 . && podman push --tls-verify=false localhost:5001/my-app:1.0
 
 # Copyright The Kubernetes Authors.
 #
@@ -21,6 +22,9 @@
 
 set -o errexit
 
+a="/$0"; a="${a%/*}"; a="${a:-.}"; a="${a##/}/"; SCRIPT_DIR=$(cd "$a"; pwd)
+. "${SCRIPT_DIR}/../container-runtime.sh"
+
 # 1. Create registry container unless it already exists
 CLUSTER_NAME="${KIND_CLUSTER_NAME:-workshop-cluster}"
 reg_name="${REGISTRY_NAME:-kind-registry}"
@@ -28,8 +32,8 @@ reg_port="${REGISTRY_PORT:-5001}"
 
 # reg_name='kind-registry'
 # reg_port='5001'
-if [ "$(docker inspect -f '{{.State.Running}}' "${reg_name}" 2>/dev/null || true)" != 'true' ]; then
-  docker run \
+if [ "$(${CONTAINER_RUNTIME} inspect -f '{{.State.Running}}' "${reg_name}" 2>/dev/null || true)" != 'true' ]; then
+  ${CONTAINER_RUNTIME} run \
     -d --restart=always -p "127.0.0.1:${reg_port}:5000" --network bridge --name "${reg_name}" \
     registry:3
 fi
@@ -63,16 +67,16 @@ fi
 # alias localhost:${reg_port} to the registry container when pulling images
 REGISTRY_DIR="/etc/containerd/certs.d/localhost:${reg_port}"
 for node in $(kind get nodes --name="${CLUSTER_NAME}"); do
-  docker exec "${node}" mkdir -p "${REGISTRY_DIR}"
-  cat <<EOF | docker exec -i "${node}" cp /dev/stdin "${REGISTRY_DIR}/hosts.toml"
+  ${CONTAINER_RUNTIME} exec "${node}" mkdir -p "${REGISTRY_DIR}"
+  cat <<EOF | ${CONTAINER_RUNTIME} exec -i "${node}" cp /dev/stdin "${REGISTRY_DIR}/hosts.toml"
 [host."http://${reg_name}:5000"]
 EOF
 done
 
 # 4. Connect the registry to the cluster network if not already connected
 # This allows kind to bootstrap the network but ensures they're on the same network
-if [ "$(docker inspect -f='{{json .NetworkSettings.Networks.kind}}' "${reg_name}")" = 'null' ]; then
-  docker network connect "kind" "${reg_name}"
+if [ "$(${CONTAINER_RUNTIME} inspect -f='{{json .NetworkSettings.Networks.kind}}' "${reg_name}")" = 'null' ]; then
+  ${CONTAINER_RUNTIME} network connect "kind" "${reg_name}"
 fi
 
 # 5. Document the local registry
@@ -90,8 +94,10 @@ data:
 EOF
 
 # 6. Make it avaialbe for argocd
-# HOST_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' kind-registry | awk '{print $1}')
-HOST_IP=$(docker inspect kind-registry | jq -r '.[0].NetworkSettings.Networks | [.[] .IPAddress] | .[-1]')
+# HOST_IP=$(${CONTAINER_RUNTIME} inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' kind-registry | awk '{print $1}')
+# Look up the "kind" network by name: picking the last network only worked on docker
+# because "kind" sorts after "bridge", on podman it sorts before "podman".
+HOST_IP=$(${CONTAINER_RUNTIME} inspect -f '{{(index .NetworkSettings.Networks "kind").IPAddress}}' "${reg_name}")
 cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Service
